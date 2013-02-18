@@ -20,6 +20,7 @@ namespace OMNE
             Peptide = peptide;
             EValue = eValue;
             Ppm = ppm;
+            //;
         }
 
         public int CompareTo(PrecursorPPM other)
