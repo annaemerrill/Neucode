@@ -2,17 +2,18 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using Coon;
-using CoonThermo.IO;
-using Coon.Spectra;
+using CSMSL;
+using CSMSL.IO;
+using CSMSL.Spectral;
 
-namespace OMNE
+
+namespace Coon.NeuQuant
 {
     class Pair
     {
-        public PeptideID parent;
-        public int scanNumber;
-        public ThermoRawFile rawFile;
+        public PeptideID parent; // The peptide the pair belongs to
+        public int scanNumber; // The scan number the pair is associated with
+        public MSDataFile rawFile; // The raw file the pair is associated with
         public int totalPeakCount
         {
             get
@@ -33,10 +34,9 @@ namespace OMNE
                 }
                 return count;
             }
-        }
-        //public IsotopePair[] isotopes; //Isotope will be null only if neither channel produces a peak
-        public LabeledPeak[,] peaks; //Number of rows equals the number of channels; number of columns equals the number of isotopes considered
-        public bool[,] complete
+        } // The total number of peaks associated with this pair
+        public ILabeledPeak[,] peaks; // Keeps track of peaks for quantitation (rows = # channels; columns = # isotopes)
+        public bool[,] complete // Keeps track of whether or not a cluster (i.e., set of isotopologues) of peaks is complete (rows = # clusters; columns = # isotopes)
         {
             get
             {
@@ -57,7 +57,8 @@ namespace OMNE
                                 channelIndex = c * isotopologues;
                                 for (int i = channelIndex; i < channelIndex + isotopologues; i++)
                                 {
-                                    if (peaks[i, j] == null || peaks[i, j].MZ == 0)
+                                    // A cluster is incomplete if any of its peaks are null or noise-band capped
+                                    if (peaks[i, j] == null || peaks[i, j].X == 0)
                                     {
                                         complete[c,j] = false;
                                     }
@@ -70,7 +71,7 @@ namespace OMNE
                 return complete;
             }
         }
-        public double[,] maxIntensity
+        public double[,] maxIntensity // Keeps track of each cluster's maximum intensity (rows = # clusters; columns = # isotopes)
         {
             get
             {
@@ -83,6 +84,7 @@ namespace OMNE
                 {
                     if (peaks != null)
                     {
+                        double injectionTime = rawFile.GetInjectionTime(scanNumber);
                         for (int j = 0; j < isotopes; j++)
                         {
                             for (int c = 0; c < clusters; c++)
@@ -91,9 +93,9 @@ namespace OMNE
                                 channelIndex = c * isotopologues;
                                 for (int i = channelIndex; i < channelIndex + isotopologues; i++)
                                 {
-                                    if (peaks[i, j] != null && peaks[i, j].dNL > max[c,j])
+                                    if (peaks[i, j] != null && peaks[i, j].GetDenormalizedIntensity(injectionTime) > max[c,j])
                                     {
-                                        max[c,j] = peaks[i, j].dNL;
+                                        max[c,j] = peaks[i, j].GetDenormalizedIntensity(injectionTime);
                                     }
                                 }
                             }
@@ -103,7 +105,7 @@ namespace OMNE
                 return max;
             }
         }
-        public int[,] peakCount
+        public int[,] peakCount // Keeps track of the number of peaks in each cluster (rows = # clusters; columns = # isotopes)
         {
             get
             {
@@ -132,13 +134,44 @@ namespace OMNE
                 return count;
             }
         }
+        public int charge; // Charge associated with the parent peptide's best PSM
+        public double averageNoise // The average noise level of the pair's detected peaks
+        {
+            get
+            {
+                double average = 0;
+                int numNoisePeaks = 0;
+                double noiseTotal = 0;
+                if (peaks != null)
+                {
+                    for (int i = 0; i < parent.numChannels; i++)
+                    {
+                        for (int j = 0; j < parent.numIsotopes; j++)
+                        {
+                            if (peaks[i, j] != null)
+                            {
+                                numNoisePeaks++;
+                                noiseTotal += peaks[i, j].Noise;
+                            }
+                        }
+                    }
+                    if (numNoisePeaks > 0)
+                    {
+                        average = noiseTotal / ((double)numNoisePeaks);
+                    }
+                }
+                return average;
+            }
+        }
 
-        public Pair(PeptideID parent, ThermoRawFile rawFile, int scanNumber)
+        // Creates a pair associated with a given peptide and scan number within a raw file
+        public Pair(PeptideID parent, MSDataFile rawFile, int scanNumber)
         {
             this.parent = parent;
             this.scanNumber = scanNumber;
             this.rawFile = rawFile;
-            peaks = new LabeledPeak[parent.numChannels, parent.numIsotopes];
+            peaks = new ILabeledPeak[parent.numChannels, parent.numIsotopes];
+            charge = parent.PSMs[rawFile][0].Charge;
         }
         
         public bool checkCoalescence(int Isotope, int ScanNumber, int Channel)
@@ -147,8 +180,8 @@ namespace OMNE
             int isotope = Isotope;
             int scanNumber = ScanNumber;
             int channel = Channel;
-            LabeledPeak light;
-            LabeledPeak heavy;
+            ILabeledPeak light;
+            ILabeledPeak heavy;
             int channels = parent.numChannels;
 
             //First, look for pairs in more abundant isotopes, if possible
@@ -160,7 +193,7 @@ namespace OMNE
                     {
                         light = peaks[i, j];
                         heavy = peaks[i + 1, j];
-                        if (light != null && heavy != null && light.MZ > 0 && heavy.MZ > 0)
+                        if (light != null && heavy != null && light.X > 0 && heavy.X > 0)
                         {
                             coalescence = false;
                         }
@@ -179,7 +212,7 @@ namespace OMNE
                         {
                             light = peaks[i, j];
                             heavy = peaks[i + 1, j];
-                            if (light != null && heavy != null && light.MZ > 0 && heavy.MZ > 0)
+                            if (light != null && heavy != null && light.X > 0 && heavy.X > 0)
                             {
                                 coalescence = false;
                             }
@@ -194,7 +227,7 @@ namespace OMNE
                 List<Pair> pairs;
                 Pair current;
                 bool pairFound = false;
-                parent.allHILACPairs.TryGetValue(rawFile, out pairs);
+                parent.allPairs.TryGetValue(rawFile, out pairs);
                 int k = pairs.Count - 2;
                 while (!pairFound && k >= 0)
                 {
@@ -205,7 +238,7 @@ namespace OMNE
                         {
                             light = current.peaks[i, j];
                             heavy = current.peaks[i + 1, j];
-                            if (light != null && heavy != null && light.MZ > 0 && heavy.MZ > 0)
+                            if (light != null && heavy != null && light.X > 0 && heavy.X > 0)
                             {
                                 coalescence = false;
                                 pairFound = true;
@@ -217,101 +250,5 @@ namespace OMNE
             }
             return coalescence;
         }
-        
-        /*public bool checkPeaks(ThermoRawFileScan current)
-        {
-            bool noiseBandCapped = false;
-            int numChannels = Form1.NUMCHANNELS;
-            int numIsotopes = Form1.NUMISOTOPES;
-            double injectionTime = rawFile.GetInjectionTime(current.ScanNum);
-            double noise;
-            List<double> noisePeaks = new List<double>();
-            PeptideSpectralMatch best;
-            int charge;
-            LabeledPeak light;
-            LabeledPeak heavy;
-            Spacing spacing;
-
-            best = parent.bestPSM[rawFile];
-            charge = best.Charge; 
-
-            //Calculate the average noise & check for exceeded maximums
-            for (int i = 0; i < numChannels; i++)
-            {
-                for (int j = 0; j < numIsotopes; j++)
-                {
-                    if (peaks[i, j] != null)
-                    {
-                        noisePeaks.Add(peaks[i, j].Noise * injectionTime);
-
-                        if (peaks[i, j].Intensity > parent.maxIntensity[i, 0])
-                        {
-                            parent.maxIntensity[i, 0] = peaks[i, j].Intensity;
-                        }
-                    }
-                }
-            }
-            noise = noisePeaks.Sum() / (double)noisePeaks.Count;
-
-            //Apply noise to missing channels
-            for (int i = 0; i < numChannels; i += 2)
-            {
-                for (int j = 0; j < numIsotopes; j++)
-                {
-                    light = peaks[i, j];
-                    heavy = peaks[i + 1, j];
-                    if (light == null &&  heavy == null)
-                    {
-
-                    }
-                    else if (light != null && heavy != null)
-                    {
-                        spacing = new Spacing(light, heavy, charge);
-                        parent.peakSpacings.Add(spacing);
-                    }
-                    else //Check for coalescence
-                    {
-                        bool coalescence = checkCoalescence(j, current.ScanNum, i);
-
-                        if (coalescence) //Probable coalescence
-                        {
-                            //Console.WriteLine("possible coalescence detected");
-                            if (light == null)
-                            {
-                                parent.coalescencedNL.Add(heavy.Intensity);
-                                parent.coalescenceTIC.Add(heavy.Intensity / (current.TIC * injectionTime));
-                            }
-
-                            if (heavy == null)
-                            {
-                                parent.coalescencedNL.Add(light.Intensity);
-                                parent.coalescenceTIC.Add(light.Intensity / (current.TIC * injectionTime));
-                            }
-                            heavy = null;
-                            light = null;
-                        }
-                        else //No signs of coalescence -- noise-band cap
-                        {
-                            if (light == null)
-                            {
-                                light = new LabeledPeak();
-                                light.Intensity = noise;
-                                light.MZ = 0;
-                                noiseBandCapped = true;
-                            }
-                            if (heavy == null)
-                            {
-                                heavy = new LabeledPeak();
-                                heavy.Intensity = noise;
-                                heavy.MZ = 0;
-                                noiseBandCapped = true;
-                            }
-                        }
-                    }
-                }
-            }
-            return noiseBandCapped;
-        }*/
-
     }
 }

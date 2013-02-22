@@ -1,4 +1,4 @@
-﻿namespace OMNE
+﻿namespace Coon.NeuQuant
 {
     partial class Form1
     {

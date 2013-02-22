@@ -2,11 +2,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using Coon;
-using CoonThermo.IO;
-using Coon.Spectra;
+using CSMSL.Spectral;
+using CSMSL.IO.Thermo;
+using CSMSL;
 
-namespace OMNE
+namespace Coon.NeuQuant
 {
     class Spacing : IComparable<Spacing>
     {
@@ -18,7 +18,7 @@ namespace OMNE
         public bool heavy;
         public double MZ;
 
-        public Spacing(LabeledPeak light, LabeledPeak heavy, int charge)
+        public Spacing(MZPeak light, MZPeak heavy, int charge)
         {
             spacing = (heavy.MZ - light.MZ) * (double)charge;
 

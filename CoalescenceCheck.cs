@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace OMNE
+namespace Coon.NeuQuant
 {
     class CoalescenceCheck : IComparable<CoalescenceCheck>
     {

@@ -2,11 +2,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using Coon;
-using CoonThermo.IO;
-using Coon.Spectra;
+using CSMSL;
+using CSMSL.Spectral;
+using CSMSL.IO;
 
-namespace OMNE
+namespace Coon.NeuQuant
 {
     class IsotopePair
     {
@@ -23,6 +23,7 @@ namespace OMNE
         public double intensity;
         public bool missingChannel;
 
+        // 2 isotopologue pairs
         public IsotopePair(Pair parent, int isotope, double lightMZ, double lightIntensity, double heavyMZ, double heavyIntensity)
         {
             this.parent = parent;
@@ -58,6 +59,7 @@ namespace OMNE
 
         }
 
+        // 4 isotopologue pairs
         public IsotopePair(Pair parent, int isotope, double peak1MZ, double peak1Intensity, double peak2MZ, double peak2Intensity, double peak3MZ, double peak3Intensity, double peak4MZ, double peak4Intensity)
         {
             this.parent = parent;

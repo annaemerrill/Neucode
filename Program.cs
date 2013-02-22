@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
 
-namespace OMNE
+namespace Coon.NeuQuant
 {
     static class Program
     {
