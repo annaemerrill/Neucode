@@ -7,6 +7,13 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CSMSL", "..\CSMSL\CSMSL\CSM
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Thermo", "..\CSMSL\CSMSL\IO\Thermo\Thermo.csproj", "{24DC85FF-E97B-4140-9614-77DD8FDDD32F}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{571DF1B5-936E-48C1-BCCB-849A4B142147}"
+	ProjectSection(SolutionItems) = preProject
+		.nuget\NuGet.Config = .nuget\NuGet.Config
+		.nuget\NuGet.exe = .nuget\NuGet.exe
+		.nuget\NuGet.targets = .nuget\NuGet.targets
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -15,7 +22,8 @@ Global
 		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{4E32FB84-71FA-4240-AA94-8B72E25C86F3}.Debug|x64.ActiveCfg = Debug|x86
+		{4E32FB84-71FA-4240-AA94-8B72E25C86F3}.Debug|x64.ActiveCfg = Debug|x64
+		{4E32FB84-71FA-4240-AA94-8B72E25C86F3}.Debug|x64.Build.0 = Debug|x64
 		{4E32FB84-71FA-4240-AA94-8B72E25C86F3}.Debug|x86.ActiveCfg = Debug|x86
 		{4E32FB84-71FA-4240-AA94-8B72E25C86F3}.Debug|x86.Build.0 = Debug|x86
 		{4E32FB84-71FA-4240-AA94-8B72E25C86F3}.Release|x64.ActiveCfg = Release|x86

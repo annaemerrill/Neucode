@@ -163,6 +163,7 @@ namespace Coon.NeuQuant
                 return average;
             }
         }
+        public double injectionTime { get; set; }
 
         // Creates a pair associated with a given peptide and scan number within a raw file
         public Pair(PeptideID parent, MSDataFile rawFile, int scanNumber)
@@ -171,7 +172,7 @@ namespace Coon.NeuQuant
             this.scanNumber = scanNumber;
             this.rawFile = rawFile;
             peaks = new ILabeledPeak[parent.numChannels, parent.numIsotopes];
-            charge = parent.PSMs[rawFile][0].Charge;
+            charge = parent.bestPSMs[rawFile].Charge;
         }
         
         public bool checkCoalescence(int Isotope, int ScanNumber, int Channel)
