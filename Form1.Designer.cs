@@ -74,9 +74,15 @@
             this.Arg = new System.Windows.Forms.RadioButton();
             this.Leu = new System.Windows.Forms.RadioButton();
             this.IncompleteIncorporation = new System.Windows.Forms.CheckBox();
+            this.label11 = new System.Windows.Forms.Label();
+            this.label12 = new System.Windows.Forms.Label();
+            this.PeakSeparation = new System.Windows.Forms.NumericUpDown();
+            this.QuantResolution = new System.Windows.Forms.NumericUpDown();
             ((System.ComponentModel.ISupportInitialize)(this.rtWindow)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.signalToNoiseThreshold)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.Isotopes)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.PeakSeparation)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.QuantResolution)).BeginInit();
             this.SuspendLayout();
             // 
             // label1
@@ -128,14 +134,14 @@
             0,
             0,
             131072});
-            this.rtWindow.Location = new System.Drawing.Point(223, 340);
+            this.rtWindow.Location = new System.Drawing.Point(192, 338);
             this.rtWindow.Maximum = new decimal(new int[] {
             5,
             0,
             0,
             0});
             this.rtWindow.Name = "rtWindow";
-            this.rtWindow.Size = new System.Drawing.Size(86, 20);
+            this.rtWindow.Size = new System.Drawing.Size(47, 20);
             this.rtWindow.TabIndex = 6;
             this.rtWindow.Value = new decimal(new int[] {
             50,
@@ -146,11 +152,11 @@
             // label4
             // 
             this.label4.AutoSize = true;
-            this.label4.Location = new System.Drawing.Point(220, 324);
+            this.label4.Location = new System.Drawing.Point(189, 322);
             this.label4.Name = "label4";
-            this.label4.Size = new System.Drawing.Size(89, 13);
+            this.label4.Size = new System.Drawing.Size(47, 13);
             this.label4.TabIndex = 7;
-            this.label4.Text = "RT Window (min)";
+            this.label4.Text = "RT (min)";
             // 
             // RAWBrowse
             // 
@@ -184,7 +190,7 @@
             // 
             // start
             // 
-            this.start.Location = new System.Drawing.Point(491, 221);
+            this.start.Location = new System.Drawing.Point(491, 208);
             this.start.Name = "start";
             this.start.Size = new System.Drawing.Size(75, 23);
             this.start.TabIndex = 17;
@@ -199,7 +205,7 @@
             // noiseBandCap
             // 
             this.noiseBandCap.AutoSize = true;
-            this.noiseBandCap.Location = new System.Drawing.Point(383, 352);
+            this.noiseBandCap.Location = new System.Drawing.Point(393, 367);
             this.noiseBandCap.Name = "noiseBandCap";
             this.noiseBandCap.Size = new System.Drawing.Size(183, 17);
             this.noiseBandCap.TabIndex = 18;
@@ -209,7 +215,7 @@
             // coalescence
             // 
             this.coalescence.AutoSize = true;
-            this.coalescence.Location = new System.Drawing.Point(383, 375);
+            this.coalescence.Location = new System.Drawing.Point(393, 390);
             this.coalescence.Name = "coalescence";
             this.coalescence.Size = new System.Drawing.Size(147, 17);
             this.coalescence.TabIndex = 19;
@@ -231,14 +237,14 @@
             0,
             0,
             65536});
-            this.signalToNoiseThreshold.Location = new System.Drawing.Point(223, 379);
+            this.signalToNoiseThreshold.Location = new System.Drawing.Point(255, 338);
             this.signalToNoiseThreshold.Maximum = new decimal(new int[] {
             10,
             0,
             0,
             0});
             this.signalToNoiseThreshold.Name = "signalToNoiseThreshold";
-            this.signalToNoiseThreshold.Size = new System.Drawing.Size(71, 20);
+            this.signalToNoiseThreshold.Size = new System.Drawing.Size(38, 20);
             this.signalToNoiseThreshold.TabIndex = 21;
             this.signalToNoiseThreshold.Value = new decimal(new int[] {
             30,
@@ -249,16 +255,17 @@
             // label6
             // 
             this.label6.AutoSize = true;
-            this.label6.Location = new System.Drawing.Point(223, 363);
+            this.label6.Location = new System.Drawing.Point(252, 322);
             this.label6.Name = "label6";
-            this.label6.Size = new System.Drawing.Size(71, 13);
+            this.label6.Size = new System.Drawing.Size(50, 13);
             this.label6.TabIndex = 22;
-            this.label6.Text = "Minimum S/N";
+            this.label6.Text = "Min. S/N";
+            this.label6.Click += new System.EventHandler(this.label6_Click);
             // 
             // label5
             // 
             this.label5.AutoSize = true;
-            this.label5.Location = new System.Drawing.Point(223, 402);
+            this.label5.Location = new System.Drawing.Point(324, 324);
             this.label5.Name = "label5";
             this.label5.Size = new System.Drawing.Size(47, 13);
             this.label5.TabIndex = 23;
@@ -266,7 +273,7 @@
             // 
             // Isotopes
             // 
-            this.Isotopes.Location = new System.Drawing.Point(226, 418);
+            this.Isotopes.Location = new System.Drawing.Point(327, 340);
             this.Isotopes.Maximum = new decimal(new int[] {
             10,
             0,
@@ -278,7 +285,7 @@
             0,
             0});
             this.Isotopes.Name = "Isotopes";
-            this.Isotopes.Size = new System.Drawing.Size(61, 20);
+            this.Isotopes.Size = new System.Drawing.Size(30, 20);
             this.Isotopes.TabIndex = 24;
             this.Isotopes.Value = new decimal(new int[] {
             3,
@@ -289,7 +296,7 @@
             // Conversion
             // 
             this.Conversion.AutoSize = true;
-            this.Conversion.Location = new System.Drawing.Point(383, 329);
+            this.Conversion.Location = new System.Drawing.Point(393, 344);
             this.Conversion.Name = "Conversion";
             this.Conversion.Size = new System.Drawing.Size(157, 17);
             this.Conversion.TabIndex = 25;
@@ -299,7 +306,7 @@
             // label7
             // 
             this.label7.AutoSize = true;
-            this.label7.Location = new System.Drawing.Point(380, 281);
+            this.label7.Location = new System.Drawing.Point(390, 296);
             this.label7.Name = "label7";
             this.label7.Size = new System.Drawing.Size(111, 13);
             this.label7.TabIndex = 26;
@@ -308,7 +315,7 @@
             // filterProfiles
             // 
             this.filterProfiles.AutoSize = true;
-            this.filterProfiles.Location = new System.Drawing.Point(383, 306);
+            this.filterProfiles.Location = new System.Drawing.Point(393, 321);
             this.filterProfiles.Name = "filterProfiles";
             this.filterProfiles.Size = new System.Drawing.Size(152, 17);
             this.filterProfiles.TabIndex = 27;
@@ -544,18 +551,84 @@
             // IncompleteIncorporation
             // 
             this.IncompleteIncorporation.AutoSize = true;
-            this.IncompleteIncorporation.Location = new System.Drawing.Point(383, 398);
+            this.IncompleteIncorporation.Location = new System.Drawing.Point(393, 413);
             this.IncompleteIncorporation.Name = "IncompleteIncorporation";
             this.IncompleteIncorporation.Size = new System.Drawing.Size(169, 17);
             this.IncompleteIncorporation.TabIndex = 49;
             this.IncompleteIncorporation.Text = "Check for Partial Incorporation";
             this.IncompleteIncorporation.UseVisualStyleBackColor = true;
             // 
+            // label11
+            // 
+            this.label11.AutoSize = true;
+            this.label11.Location = new System.Drawing.Point(201, 371);
+            this.label11.Name = "label11";
+            this.label11.Size = new System.Drawing.Size(38, 13);
+            this.label11.TabIndex = 50;
+            this.label11.Text = "FWxM";
+            // 
+            // label12
+            // 
+            this.label12.AutoSize = true;
+            this.label12.Location = new System.Drawing.Point(284, 371);
+            this.label12.Name = "label12";
+            this.label12.Size = new System.Drawing.Size(73, 13);
+            this.label12.TabIndex = 51;
+            this.label12.Text = "Resolution (K)";
+            // 
+            // PeakSeparation
+            // 
+            this.PeakSeparation.Location = new System.Drawing.Point(204, 390);
+            this.PeakSeparation.Minimum = new decimal(new int[] {
+            1,
+            0,
+            0,
+            0});
+            this.PeakSeparation.Name = "PeakSeparation";
+            this.PeakSeparation.Size = new System.Drawing.Size(35, 20);
+            this.PeakSeparation.TabIndex = 52;
+            this.PeakSeparation.Value = new decimal(new int[] {
+            10,
+            0,
+            0,
+            0});
+            // 
+            // QuantResolution
+            // 
+            this.QuantResolution.Increment = new decimal(new int[] {
+            10,
+            0,
+            0,
+            0});
+            this.QuantResolution.Location = new System.Drawing.Point(287, 390);
+            this.QuantResolution.Maximum = new decimal(new int[] {
+            960,
+            0,
+            0,
+            0});
+            this.QuantResolution.Minimum = new decimal(new int[] {
+            30,
+            0,
+            0,
+            0});
+            this.QuantResolution.Name = "QuantResolution";
+            this.QuantResolution.Size = new System.Drawing.Size(44, 20);
+            this.QuantResolution.TabIndex = 53;
+            this.QuantResolution.Value = new decimal(new int[] {
+            480,
+            0,
+            0,
+            0});
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(589, 450);
+            this.Controls.Add(this.QuantResolution);
+            this.Controls.Add(this.PeakSeparation);
+            this.Controls.Add(this.label12);
+            this.Controls.Add(this.label11);
             this.Controls.Add(this.IncompleteIncorporation);
             this.Controls.Add(this.Leu);
             this.Controls.Add(this.Arg);
@@ -605,6 +678,8 @@
             ((System.ComponentModel.ISupportInitialize)(this.rtWindow)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.signalToNoiseThreshold)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.Isotopes)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.PeakSeparation)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.QuantResolution)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -658,6 +733,10 @@
         private System.Windows.Forms.RadioButton Arg;
         private System.Windows.Forms.RadioButton Leu;
         private System.Windows.Forms.CheckBox IncompleteIncorporation;
+        private System.Windows.Forms.Label label11;
+        private System.Windows.Forms.Label label12;
+        private System.Windows.Forms.NumericUpDown PeakSeparation;
+        private System.Windows.Forms.NumericUpDown QuantResolution;
     }
 }
 

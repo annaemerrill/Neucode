@@ -19,7 +19,8 @@ namespace Coon.NeuQuant
         public static MassTolerance NEUCODE = new MassTolerance(MassToleranceType.PPM, 10.0); // Individual NeuCode peak tolerance (for higher resolution MS1 scans)
         public static double INTENSITYCUTOFF = 1.0 / (2.0 * Math.E); // Intensity threshold for quantitation filtering to eliminate low-level peaks
         public static double SIGNALTONOISE = Form1.MINIMUMSN;
-
+        public static double QUANTRESOLUTION = Form1.QUANTRESOLUTION;
+        public static double QUANTSEPARATION = Form1.THEORETICALSEPARATION;
 
         // Class members
         // Experimental design information
@@ -633,13 +634,12 @@ namespace Coon.NeuQuant
                 }
                 else
                 {
-                    int charge = bestPSM.Charge;
-                    double FWTM = 1.82262 * ((Mass.MzFromMass(theoMasses[0,0], charge) / (480000.0 * Math.Sqrt(400 / Mass.MzFromMass(theoMasses[0,0], charge)))));
-                    double separation = (numLabels * spacingMassRange[0].Mean) / (double)charge;
-
-                    if (separation > FWTM)
+                    for (int i = 0; i < numClusters; i++)
                     {
-                        return true;
+                        if (GetTheoreticalResolvability(i))
+                        {
+                            return true;
+                        }
                     }
                     return false;
                 }
@@ -668,6 +668,12 @@ namespace Coon.NeuQuant
             Peptide check10;
             Peptide check11;
             Peptide check12;
+            Peptide check13;
+            Peptide check14;
+            Peptide check15;
+            Peptide check16;
+            Peptide check17;
+            Peptide check18;
 
             // Get rid of variable label incorporations
             string sequenceFixed = "";
@@ -709,7 +715,7 @@ namespace Coon.NeuQuant
                 else if (sequence[i].Equals('y'))
                 {
                     sequenceNoMods += 'Y';
-                    if (Form1.NEUCODE_DUPLEX_CARBAMYL || Form1.NEUCODE_4PLEX_LIGHT || Form1.NEUCODE_4PLEX_MEDIUM || Form1.NEUCODE_4PLEX_HEAVY || Form1.NEUCODE_12PLEX)
+                    if (Form1.NEUCODE_DUPLEX_CARBAMYL || Form1.NEUCODE_4PLEX_LIGHT || Form1.NEUCODE_4PLEX_MEDIUM || Form1.NEUCODE_4PLEX_HEAVY || Form1.NEUCODE_12PLEX ||Form1.NEUCODE_SIXPLEX_MTRAQ || Form1.NEUCODE_9PLEX_MTRAQ || Form1.NEUCODE_12PLEX_MTRAQ || Form1.NEUCODE_18PLEX_MTRAQ)
                     {
                         tyrosineNHSPositions.Add(i);
                     }
@@ -748,7 +754,7 @@ namespace Coon.NeuQuant
             // Set number of labels and search range for PPM correction
             if (Form1.NEUCODE)
             {
-                if (Form1.NEUCODE_DUPLEX_CARBAMYL || Form1.NEUCODE_4PLEX_LIGHT || Form1.NEUCODE_4PLEX_MEDIUM || Form1.NEUCODE_4PLEX_HEAVY || Form1.NEUCODE_12PLEX)
+                if (Form1.NEUCODE_DUPLEX_CARBAMYL || Form1.NEUCODE_4PLEX_LIGHT || Form1.NEUCODE_4PLEX_MEDIUM || Form1.NEUCODE_4PLEX_HEAVY || Form1.NEUCODE_12PLEX || Form1.NEUCODE_SIXPLEX_MTRAQ || Form1.NEUCODE_9PLEX_MTRAQ || Form1.NEUCODE_12PLEX_MTRAQ || Form1.NEUCODE_18PLEX_MTRAQ)
                 {
                     numLabels = countResidues('K', peptide.Sequence) + 1 + tyrosineNHSPositions.Count;
                     firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 50.0);
@@ -808,6 +814,7 @@ namespace Coon.NeuQuant
             // Set theoretical masses of each channel
             if (numLabels > 0)
             {             
+                // Duplex NeuCode (metabolic)
                 if (Form1.NEUCODE_DUPLEX_LYS8_36MDA || Form1.NEUCODE_DUPLEX_LYS1_6MDA || Form1.NEUCODE_DUPLEX_LEU7_18MDA)
                 {
                     check1 = new Peptide(peptide);
@@ -826,6 +833,7 @@ namespace Coon.NeuQuant
                     theoMasses[1, 0] = check2.Mass.Monoisotopic;
                 }
 
+                // 3plex NeuCode
                 else if (Form1.NEUCODE_TRIPLEX_LYS8_18MDA)
                 {
                     check1 = new Peptide(peptide);
@@ -839,6 +847,7 @@ namespace Coon.NeuQuant
                     theoMasses[2, 0] = check3.Mass.Monoisotopic;
                 }
 
+                // 4plex NeuCode (metabolic)
                 else if (Form1.NEUCODE_FOURPLEX_LYS8_12MDA)
                 {
                     check1 = new Peptide(peptide);
@@ -855,6 +864,7 @@ namespace Coon.NeuQuant
                     theoMasses[3, 0] = check4.Mass.Monoisotopic;
                 }
 
+                // 6plex NeuCode (metabolic)
                 else if (Form1.NEUCODE_SIXPLEX_LYS8_6MDA)
                 {
                     check1 = new Peptide(peptide);
@@ -877,6 +887,7 @@ namespace Coon.NeuQuant
                     theoMasses[5, 0] = check6.Mass.Monoisotopic;
                 }
 
+                // Duplex NeuCode (chemical)
                 else if (Form1.NEUCODE_DUPLEX_CARBAMYL)
                 {
                     check1 = new Peptide(peptide);
@@ -896,6 +907,7 @@ namespace Coon.NeuQuant
                     theoMasses[1, 0] = check2.Mass.Monoisotopic;
                 }
 
+                // 4plex NeuCode (chemical)
                 else if (Form1.NEUCODE_4PLEX_LIGHT || Form1.NEUCODE_4PLEX_MEDIUM || Form1.NEUCODE_4PLEX_HEAVY)
                 {
                     check1 = new Peptide(peptide);
@@ -947,6 +959,7 @@ namespace Coon.NeuQuant
                     theoMasses[3, 0] = check4.Mass.Monoisotopic;
                 }
 
+                // 12plex NeuCode (chemical)
                 else if (Form1.NEUCODE_12PLEX)
                 {
                     check1 = new Peptide(peptide);
@@ -1007,6 +1020,7 @@ namespace Coon.NeuQuant
                     theoMasses[11, 0] = check12.Mass.Monoisotopic;
                 }
 
+                // 6plex NeuCode (chemical)
                 else if (Form1.NEUCODE_SIXPLEX_MTRAQ)
                 {
                     check1 = new Peptide(peptide);
@@ -1016,12 +1030,32 @@ namespace Coon.NeuQuant
                     check5 = new Peptide(peptide);
                     check6 = new Peptide(peptide);
 
-                    check1.SetModification(NamedChemicalFormula.GetModification("mTRAQ L Lys +8 13C6 15N2"), ModificationSites.K | ModificationSites.NPep);
-                    check2.SetModification(NamedChemicalFormula.GetModification("mTRAQ L Lys +8 2H8"), ModificationSites.K | ModificationSites.NPep);
-                    check3.SetModification(NamedChemicalFormula.GetModification("mTRAQ M Lys +8 13C6 15N2"), ModificationSites.K | ModificationSites.NPep);
-                    check4.SetModification(NamedChemicalFormula.GetModification("mTRAQ M Lys +8 2H8"), ModificationSites.K | ModificationSites.NPep);
-                    check5.SetModification(NamedChemicalFormula.GetModification("mTRAQ H Lys +8 13C6 15N2"), ModificationSites.K | ModificationSites.NPep);
-                    check6.SetModification(NamedChemicalFormula.GetModification("mTRAQ H Lys +8 2H8"), ModificationSites.K | ModificationSites.NPep);
+                    if (tyrosineNHSPositions.Count > 0)
+                    {
+                        foreach (int position in tyrosineNHSPositions)
+                        {
+                            check1.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), position);
+                            check2.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), position);
+                            check3.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), position);
+                            check4.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), position);
+                            check5.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), position);
+                            check6.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), position);
+                        }
+                    }
+
+                    check1.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), ModificationSites.NPep);
+                    check2.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), ModificationSites.NPep);
+                    check3.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), ModificationSites.NPep);
+                    check4.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), ModificationSites.NPep);
+                    check5.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), ModificationSites.NPep);
+                    check6.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), ModificationSites.NPep);
+
+                    check1.SetModification(NamedChemicalFormula.GetModification("mTRAQ L Lys +8 13C6 15N2"), ModificationSites.K);
+                    check2.SetModification(NamedChemicalFormula.GetModification("mTRAQ L Lys +8 2H8"), ModificationSites.K);
+                    check3.SetModification(NamedChemicalFormula.GetModification("mTRAQ M Lys +8 13C6 15N2"), ModificationSites.K);
+                    check4.SetModification(NamedChemicalFormula.GetModification("mTRAQ M Lys +8 2H8"), ModificationSites.K);
+                    check5.SetModification(NamedChemicalFormula.GetModification("mTRAQ H Lys +8 13C6 15N2"), ModificationSites.K);
+                    check6.SetModification(NamedChemicalFormula.GetModification("mTRAQ H Lys +8 2H8"), ModificationSites.K);
 
                     theoMasses[0, 0] = check1.Mass.Monoisotopic;
                     theoMasses[1, 0] = check2.Mass.Monoisotopic;
@@ -1031,6 +1065,247 @@ namespace Coon.NeuQuant
                     theoMasses[5, 0] = check6.Mass.Monoisotopic;
                 }
 
+                // 9plex NeuCode (chemical)
+                else if (Form1.NEUCODE_9PLEX_MTRAQ)
+                {
+                    check1 = new Peptide(peptide);
+                    check2 = new Peptide(peptide);
+                    check3 = new Peptide(peptide);
+                    check4 = new Peptide(peptide);
+                    check5 = new Peptide(peptide);
+                    check6 = new Peptide(peptide);
+                    check7 = new Peptide(peptide);
+                    check8 = new Peptide(peptide);
+                    check9 = new Peptide(peptide);
+
+                    if (tyrosineNHSPositions.Count > 0)
+                    {
+                        foreach (int position in tyrosineNHSPositions)
+                        {
+                            check1.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), position);
+                            check2.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), position);
+                            check3.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), position);
+                            check4.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), position);
+                            check5.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), position);
+                            check6.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), position);
+                            check7.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), position);
+                            check8.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), position);
+                            check9.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), position);
+                        }
+                    }
+
+                    check1.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), ModificationSites.NPep);
+                    check2.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), ModificationSites.NPep);
+                    check3.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), ModificationSites.NPep);
+                    check4.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), ModificationSites.NPep);
+                    check5.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), ModificationSites.NPep);
+                    check6.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), ModificationSites.NPep);
+                    check7.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), ModificationSites.NPep);
+                    check8.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), ModificationSites.NPep);
+                    check9.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), ModificationSites.NPep);
+
+                    check1.SetModification(NamedChemicalFormula.GetModification("mTRAQ L Lys +8 13C6 15N2"), ModificationSites.K);
+                    check2.SetModification(NamedChemicalFormula.GetModification("mTRAQ L Lys +8 2H6 15N2"), ModificationSites.K);
+                    check3.SetModification(NamedChemicalFormula.GetModification("mTRAQ L Lys +8 2H8"), ModificationSites.K);
+                    check4.SetModification(NamedChemicalFormula.GetModification("mTRAQ M Lys +8 13C6 15N2"), ModificationSites.K);
+                    check5.SetModification(NamedChemicalFormula.GetModification("mTRAQ M Lys +8 2H6 15N2"), ModificationSites.K);
+                    check6.SetModification(NamedChemicalFormula.GetModification("mTRAQ M Lys +8 2H8"), ModificationSites.K);
+                    check7.SetModification(NamedChemicalFormula.GetModification("mTRAQ H Lys +8 13C6 15N2"), ModificationSites.K);
+                    check8.SetModification(NamedChemicalFormula.GetModification("mTRAQ H Lys +8 2H6 15N2"), ModificationSites.K);
+                    check9.SetModification(NamedChemicalFormula.GetModification("mTRAQ H Lys +8 2H8"), ModificationSites.K);
+
+                    theoMasses[0, 0] = check1.Mass.Monoisotopic;
+                    theoMasses[1, 0] = check2.Mass.Monoisotopic;
+                    theoMasses[2, 0] = check3.Mass.Monoisotopic;
+                    theoMasses[3, 0] = check4.Mass.Monoisotopic;
+                    theoMasses[4, 0] = check5.Mass.Monoisotopic;
+                    theoMasses[5, 0] = check6.Mass.Monoisotopic;
+                    theoMasses[6, 0] = check7.Mass.Monoisotopic;
+                    theoMasses[7, 0] = check8.Mass.Monoisotopic;
+                    theoMasses[8, 0] = check9.Mass.Monoisotopic;
+                }
+
+                // 12plex NeuCode (chemical)
+                else if (Form1.NEUCODE_12PLEX_MTRAQ)
+                {
+                    check1 = new Peptide(peptide);
+                    check2 = new Peptide(peptide);
+                    check3 = new Peptide(peptide);
+                    check4 = new Peptide(peptide);
+                    check5 = new Peptide(peptide);
+                    check6 = new Peptide(peptide);
+                    check7 = new Peptide(peptide);
+                    check8 = new Peptide(peptide);
+                    check9 = new Peptide(peptide);
+                    check10 = new Peptide(peptide);
+                    check11 = new Peptide(peptide);
+                    check12 = new Peptide(peptide);
+
+                    if (tyrosineNHSPositions.Count > 0)
+                    {
+                        foreach (int position in tyrosineNHSPositions)
+                        {
+                            check1.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), position);
+                            check2.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), position);
+                            check3.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), position);
+                            check4.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), position);
+                            check5.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), position);
+                            check6.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), position);
+                            check7.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), position);
+                            check8.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), position);
+                            check9.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), position);
+                            check10.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), position);
+                            check11.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), position);
+                            check12.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), position);
+                        }
+                    }
+
+                    check1.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), ModificationSites.NPep);
+                    check2.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), ModificationSites.NPep);
+                    check3.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), ModificationSites.NPep);
+                    check4.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), ModificationSites.NPep);
+                    check5.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), ModificationSites.NPep);
+                    check6.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), ModificationSites.NPep);
+                    check7.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), ModificationSites.NPep);
+                    check8.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), ModificationSites.NPep);
+                    check9.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), ModificationSites.NPep);
+                    check10.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), ModificationSites.NPep);
+                    check11.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), ModificationSites.NPep);
+                    check12.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), ModificationSites.NPep);
+
+                    check1.SetModification(NamedChemicalFormula.GetModification("mTRAQ L Lys +8 13C6 15N2"), ModificationSites.K);
+                    check2.SetModification(NamedChemicalFormula.GetModification("mTRAQ L Lys +8 13C5 2H2 15N1"), ModificationSites.K);
+                    check3.SetModification(NamedChemicalFormula.GetModification("mTRAQ L Lys +8 13C4 2H4"), ModificationSites.K);
+                    check4.SetModification(NamedChemicalFormula.GetModification("mTRAQ L Lys +8 2H8"), ModificationSites.K);
+                    check5.SetModification(NamedChemicalFormula.GetModification("mTRAQ M Lys +8 13C6 15N2"), ModificationSites.K);
+                    check6.SetModification(NamedChemicalFormula.GetModification("mTRAQ M Lys +8 13C5 2H2 15N1"), ModificationSites.K);
+                    check7.SetModification(NamedChemicalFormula.GetModification("mTRAQ M Lys +8 13C4 2H4"), ModificationSites.K);
+                    check8.SetModification(NamedChemicalFormula.GetModification("mTRAQ M Lys +8 2H8"), ModificationSites.K);
+                    check9.SetModification(NamedChemicalFormula.GetModification("mTRAQ H Lys +8 13C6 15N2"), ModificationSites.K);
+                    check10.SetModification(NamedChemicalFormula.GetModification("mTRAQ H Lys +8 13C5 2H2 15N1"), ModificationSites.K);
+                    check11.SetModification(NamedChemicalFormula.GetModification("mTRAQ H Lys +8 13C4 2H4"), ModificationSites.K);
+                    check12.SetModification(NamedChemicalFormula.GetModification("mTRAQ H Lys +8 2H8"), ModificationSites.K);
+
+                    theoMasses[0, 0] = check1.Mass.Monoisotopic;
+                    theoMasses[1, 0] = check2.Mass.Monoisotopic;
+                    theoMasses[2, 0] = check3.Mass.Monoisotopic;
+                    theoMasses[3, 0] = check4.Mass.Monoisotopic;
+                    theoMasses[4, 0] = check5.Mass.Monoisotopic;
+                    theoMasses[5, 0] = check6.Mass.Monoisotopic;
+                    theoMasses[6, 0] = check7.Mass.Monoisotopic;
+                    theoMasses[7, 0] = check8.Mass.Monoisotopic;
+                    theoMasses[8, 0] = check9.Mass.Monoisotopic;
+                    theoMasses[9, 0] = check10.Mass.Monoisotopic;
+                    theoMasses[10, 0] = check11.Mass.Monoisotopic;
+                    theoMasses[11, 0] = check12.Mass.Monoisotopic;
+                }
+
+                // 18plex NeuCode (chemical)
+                else if (Form1.NEUCODE_18PLEX_MTRAQ)
+                {
+                    check1 = new Peptide(peptide);
+                    check2 = new Peptide(peptide);
+                    check3 = new Peptide(peptide);
+                    check4 = new Peptide(peptide);
+                    check5 = new Peptide(peptide);
+                    check6 = new Peptide(peptide);
+                    check7 = new Peptide(peptide);
+                    check8 = new Peptide(peptide);
+                    check9 = new Peptide(peptide);
+                    check10 = new Peptide(peptide);
+                    check11 = new Peptide(peptide);
+                    check12 = new Peptide(peptide);
+                    check13 = new Peptide(peptide);
+                    check14 = new Peptide(peptide);
+                    check15 = new Peptide(peptide);
+                    check16 = new Peptide(peptide);
+                    check17 = new Peptide(peptide);
+                    check18 = new Peptide(peptide);
+
+                    if (tyrosineNHSPositions.Count > 0)
+                    {
+                        foreach (int position in tyrosineNHSPositions)
+                        {
+                            check1.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), position);
+                            check2.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), position);
+                            check3.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), position);
+                            check4.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), position);
+                            check5.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), position);
+                            check6.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), position);
+                            check7.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), position);
+                            check8.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), position);
+                            check9.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), position);
+                            check10.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), position);
+                            check11.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), position);
+                            check12.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), position);
+                            check13.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), position);
+                            check14.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), position);
+                            check15.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), position);
+                            check16.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), position);
+                            check17.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), position);
+                            check18.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), position);
+                        }
+                    }
+
+                    check1.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), ModificationSites.NPep);
+                    check2.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), ModificationSites.NPep);
+                    check3.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), ModificationSites.NPep);
+                    check4.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), ModificationSites.NPep);
+                    check5.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), ModificationSites.NPep);
+                    check6.SetModification(NamedChemicalFormula.GetModification("mTRAQ L"), ModificationSites.NPep);
+                    check7.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), ModificationSites.NPep);
+                    check8.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), ModificationSites.NPep);
+                    check9.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), ModificationSites.NPep);
+                    check10.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), ModificationSites.NPep);
+                    check11.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), ModificationSites.NPep);
+                    check12.SetModification(NamedChemicalFormula.GetModification("mTRAQ M"), ModificationSites.NPep);
+                    check13.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), ModificationSites.NPep);
+                    check14.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), ModificationSites.NPep);
+                    check15.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), ModificationSites.NPep);
+                    check16.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), ModificationSites.NPep);
+                    check17.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), ModificationSites.NPep);
+                    check18.SetModification(NamedChemicalFormula.GetModification("mTRAQ H"), ModificationSites.NPep);
+
+                    check1.SetModification(NamedChemicalFormula.GetModification("mTRAQ L Lys +8 13C6 15N2"), ModificationSites.K);
+                    check2.SetModification(NamedChemicalFormula.GetModification("mTRAQ L Lys +8 13C4 2H2 15N2"), ModificationSites.K);
+                    check3.SetModification(NamedChemicalFormula.GetModification("mTRAQ L Lys +8 13C5 2H2 15N1"), ModificationSites.K);
+                    check4.SetModification(NamedChemicalFormula.GetModification("mTRAQ L Lys +8 2H6 15N2"), ModificationSites.K);
+                    check5.SetModification(NamedChemicalFormula.GetModification("mTRAQ L Lys +8 13C4 2H4"), ModificationSites.K);
+                    check6.SetModification(NamedChemicalFormula.GetModification("mTRAQ L Lys +8 2H8"), ModificationSites.K);
+                    check7.SetModification(NamedChemicalFormula.GetModification("mTRAQ M Lys +8 13C6 15N2"), ModificationSites.K);
+                    check8.SetModification(NamedChemicalFormula.GetModification("mTRAQ M Lys +8 13C4 2H2 15N2"), ModificationSites.K);
+                    check9.SetModification(NamedChemicalFormula.GetModification("mTRAQ M Lys +8 13C5 2H2 15N1"), ModificationSites.K);
+                    check10.SetModification(NamedChemicalFormula.GetModification("mTRAQ M Lys +8 2H6 15N2"), ModificationSites.K);
+                    check11.SetModification(NamedChemicalFormula.GetModification("mTRAQ M Lys +8 13C4 2H4"), ModificationSites.K);
+                    check12.SetModification(NamedChemicalFormula.GetModification("mTRAQ M Lys +8 2H8"), ModificationSites.K);
+                    check13.SetModification(NamedChemicalFormula.GetModification("mTRAQ H Lys +8 13C6 15N2"), ModificationSites.K);
+                    check14.SetModification(NamedChemicalFormula.GetModification("mTRAQ H Lys +8 13C4 2H2 15N2"), ModificationSites.K);
+                    check15.SetModification(NamedChemicalFormula.GetModification("mTRAQ H Lys +8 13C5 2H2 15N1"), ModificationSites.K);
+                    check16.SetModification(NamedChemicalFormula.GetModification("mTRAQ H Lys +8 2H6 15N2"), ModificationSites.K);
+                    check17.SetModification(NamedChemicalFormula.GetModification("mTRAQ H Lys +8 13C4 2H4"), ModificationSites.K);
+                    check18.SetModification(NamedChemicalFormula.GetModification("mTRAQ H Lys +8 2H8"), ModificationSites.K);
+
+                    theoMasses[0, 0] = check1.Mass.Monoisotopic;
+                    theoMasses[1, 0] = check2.Mass.Monoisotopic;
+                    theoMasses[2, 0] = check3.Mass.Monoisotopic;
+                    theoMasses[3, 0] = check4.Mass.Monoisotopic;
+                    theoMasses[4, 0] = check5.Mass.Monoisotopic;
+                    theoMasses[5, 0] = check6.Mass.Monoisotopic;
+                    theoMasses[6, 0] = check7.Mass.Monoisotopic;
+                    theoMasses[7, 0] = check8.Mass.Monoisotopic;
+                    theoMasses[8, 0] = check9.Mass.Monoisotopic;
+                    theoMasses[9, 0] = check10.Mass.Monoisotopic;
+                    theoMasses[10, 0] = check11.Mass.Monoisotopic;
+                    theoMasses[11, 0] = check12.Mass.Monoisotopic;
+                    theoMasses[12, 0] = check13.Mass.Monoisotopic;
+                    theoMasses[13, 0] = check14.Mass.Monoisotopic;
+                    theoMasses[14, 0] = check15.Mass.Monoisotopic;
+                    theoMasses[15, 0] = check16.Mass.Monoisotopic;
+                    theoMasses[16, 0] = check17.Mass.Monoisotopic;
+                    theoMasses[17, 0] = check18.Mass.Monoisotopic;
+                }
+
+                // 6plex NeuCode (metabolic)
                 else if (Form1.NEUCODE_SIXPLEX_ARG || Form1.NEUCODE_SIXPLEX_LEU)
                 {
                     check1 = new Peptide(peptide);
@@ -1079,6 +1354,7 @@ namespace Coon.NeuQuant
                     }
                 }
 
+                // Duplex SILAC
                 else if (Form1.SILAC_DUPLEX_LYSCN || Form1.SILAC_DUPLEX_LYSH || Form1.SILAC_DUPLEX_LEUCN || Form1.SILAC_DUPLEX_LEUH)
                 {
                     check1 = new Peptide(peptide);
@@ -3343,6 +3619,28 @@ namespace Coon.NeuQuant
             conversionFactor = bestMonoMass;
 
             return bestMonoMass;
+        }
+
+        public bool GetTheoreticalResolvability(int cluster)
+        {
+            if (!Form1.NEUCODE)
+            {
+                return true;
+            }
+            else
+            {
+                int charge = bestPSM.Charge;
+                double experimentalSeparation = (numLabels * spacingMassRange[0].Mean) / (double)charge;
+                int clusterIndex = cluster * numIsotopologues;
+                double coefficient = (Math.Sqrt(2 * Math.Log(100.0 / QUANTSEPARATION))) / (Math.Sqrt(2 * Math.Log(2)));
+                double theoreticalSeparation = coefficient * ((Mass.MzFromMass(theoMasses[clusterIndex, 0], charge) / (QUANTRESOLUTION * Math.Sqrt(400 / Mass.MzFromMass(theoMasses[clusterIndex, 0], charge)))));
+
+                if (experimentalSeparation > theoreticalSeparation)
+                {
+                    return true;
+                }
+                return false;
+            }
         }
 
         /* Calculates the proportion of pairs in a given list that have missing channels detected

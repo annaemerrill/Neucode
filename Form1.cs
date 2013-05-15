@@ -28,6 +28,8 @@ namespace Coon.NeuQuant
         public static bool FIRSTSEARCHDONE;
         public static Dictionary<string, MSDataFile> RAWFILES;
         public static double MAXIMUMDNL;
+        public static double THEORETICALSEPARATION;
+        public static double QUANTRESOLUTION;
 
         // Optional analyses
         public static bool CHECKPAIRSPACING;
@@ -38,7 +40,8 @@ namespace Coon.NeuQuant
         public static bool CORRECTLEUDLOSS;
         public static bool CORRECTLEUNLOSS;
         public static bool MULTIINJECT;
-        public static bool CALCIUM;
+        public static bool AGCBINNING;
+        //public static bool CALCIUM;
         public static bool CHECKPARTIALINCORPORATION;
         //public static Dictionary<int, List<double>> PEAKSNPAIRS;
         //public static int QUANTCOUNT;
@@ -53,17 +56,20 @@ namespace Coon.NeuQuant
         public static bool NEUCODE_SIXPLEX_LYS8_6MDA;
         public static bool NEUCODE_DUPLEX_LYS1_6MDA;
         public static bool NEUCODE_DUPLEX_CARBAMYL;
-        public static bool NEUCODE_SIXPLEX_MTRAQ;
         public static bool SILAC_DUPLEX_LYSCN;
         public static bool SILAC_DUPLEX_LYSH;
         public static bool SILAC_DUPLEX_LEUCN;
         public static bool SILAC_DUPLEX_LEUH;
+        public static bool NEUCODE_SIXPLEX_MTRAQ;
         public static bool NEUCODE_SIXPLEX_ARG;
         public static bool NEUCODE_SIXPLEX_LEU;
         public static bool NEUCODE_12PLEX;
         public static bool NEUCODE_4PLEX_HEAVY;
         public static bool NEUCODE_4PLEX_MEDIUM;
         public static bool NEUCODE_4PLEX_LIGHT;
+        public static bool NEUCODE_9PLEX_MTRAQ;
+        public static bool NEUCODE_12PLEX_MTRAQ;
+        public static bool NEUCODE_18PLEX_MTRAQ;
         public static int NUMCHANNELS;
         public static int NUMISOTOPOLOGUES;
         public static int NUMCLUSTERS;
@@ -85,33 +91,40 @@ namespace Coon.NeuQuant
             RTWINDOW = (double) rtWindow.Value;
             NUMISOTOPES = (int)Isotopes.Value;
             MINIMUMSN = (double)signalToNoiseThreshold.Value;
+            THEORETICALSEPARATION = (double)PeakSeparation.Value;
+            QUANTRESOLUTION = (double)QuantResolution.Value;
             CHECKPAIRSPACING = true;
             NOISEBANDCAP = noiseBandCap.Checked;
             PEAKCOALESCENCE = coalescence.Checked;
             QUANTFILTER = filterProfiles.Checked;
             MULTIINJECT = false;
-            CALCIUM = false;
+            AGCBINNING = false;
+            //CALCIUM = false;
             //PEAKSNPAIRS = new Dictionary<int, List<double>>();
 
-            NEUCODE_DUPLEX_LYS8_36MDA = NeuCodeLys8Duplex.Checked;
+            NEUCODE_DUPLEX_LYS8_36MDA = NeuCodeLys8Duplex.Checked && !mTRAQ.Checked && !Arg.Checked && !Leu.Checked;
             NEUCODE_DUPLEX_LEU7_18MDA = NeuCodeLeu7Duplex.Checked;
-            NEUCODE_TRIPLEX_LYS8_18MDA = NeuCodeLys8Triplex.Checked;
-            NEUCODE_FOURPLEX_LYS8_12MDA = NeuCodeLys8Fourplex.Checked;
-            NEUCODE_SIXPLEX_LYS8_6MDA = NeuCodeLys8Sixplex.Checked;
+            NEUCODE_TRIPLEX_LYS8_18MDA = NeuCodeLys8Triplex.Checked && !mTRAQ.Checked;
+            NEUCODE_FOURPLEX_LYS8_12MDA = NeuCodeLys8Fourplex.Checked && !mTRAQ.Checked;
+            NEUCODE_SIXPLEX_LYS8_6MDA = NeuCodeLys8Sixplex.Checked && !mTRAQ.Checked;
+            NEUCODE_9PLEX_MTRAQ = NeuCodeLys8Triplex.Checked && mTRAQ.Checked;
+            NEUCODE_12PLEX_MTRAQ = NeuCodeLys8Fourplex.Checked && mTRAQ.Checked;
+            NEUCODE_18PLEX_MTRAQ = NeuCodeLys8Sixplex.Checked && mTRAQ.Checked;
             NEUCODE_DUPLEX_LYS1_6MDA = NeuCodeLys1.Checked;
             NEUCODE_DUPLEX_CARBAMYL = CarbamylCN.Checked;
-            NEUCODE_SIXPLEX_MTRAQ = mTRAQ.Checked;
+            NEUCODE_SIXPLEX_MTRAQ = NeuCodeLys8Duplex.Checked && mTRAQ.Checked;
+            NEUCODE_SIXPLEX_ARG = NeuCodeLys8Duplex.Checked && Arg.Checked;
+            NEUCODE_SIXPLEX_LEU = NeuCodeLys8Duplex.Checked && Leu.Checked;
             SILAC_DUPLEX_LYSCN = SILACLys8CN.Checked;
             SILAC_DUPLEX_LYSH = SILACLys8D.Checked;
             SILAC_DUPLEX_LEUCN = SILACLeu7CN.Checked;
             SILAC_DUPLEX_LEUH = SILACLeu7D.Checked;
-            NEUCODE_SIXPLEX_ARG = Arg.Checked;
-            NEUCODE_SIXPLEX_LEU = Leu.Checked;
             NEUCODE_12PLEX = Twelveplex.Checked;
             NEUCODE_4PLEX_HEAVY = FourplexH.Checked;
             NEUCODE_4PLEX_MEDIUM = FourplexM.Checked;
             NEUCODE_4PLEX_LIGHT = FourplexL.Checked;
 
+            // 2-plex SILAC
             if (SILAC_DUPLEX_LYSCN || SILAC_DUPLEX_LYSH || SILAC_DUPLEX_LEUCN || SILAC_DUPLEX_LEUH)
             {
                 NEUCODE = false;
@@ -131,6 +144,7 @@ namespace Coon.NeuQuant
                 }
             }
 
+            // 2-plex NeuCode
             if (NEUCODE_DUPLEX_LYS8_36MDA || NEUCODE_DUPLEX_LYS1_6MDA || NEUCODE_DUPLEX_CARBAMYL)
             {
                 NEUCODE = true;
@@ -140,6 +154,7 @@ namespace Coon.NeuQuant
                 NUMISOTOPOLOGUES = 2;
             }
 
+            // 3-plex NeuCode
             if (NEUCODE_TRIPLEX_LYS8_18MDA)
             {
                 NEUCODE = true;
@@ -149,6 +164,7 @@ namespace Coon.NeuQuant
                 NUMISOTOPOLOGUES = 3;
             }
 
+            // 4-plex NeuCode
             if (NEUCODE_FOURPLEX_LYS8_12MDA || NEUCODE_4PLEX_LIGHT || NEUCODE_4PLEX_MEDIUM || NEUCODE_4PLEX_HEAVY)
             {
                 NEUCODE = true;
@@ -158,35 +174,57 @@ namespace Coon.NeuQuant
                 NUMISOTOPOLOGUES = 4;
             }
 
-            if (NEUCODE_SIXPLEX_LYS8_6MDA)
+            // 6-plex NeuCode
+            if (NEUCODE_SIXPLEX_LYS8_6MDA || NEUCODE_SIXPLEX_MTRAQ || NEUCODE_SIXPLEX_ARG || NEUCODE_SIXPLEX_LEU)
             {
                 NEUCODE = true;
                 TRADITIONAL = false;
                 NUMCHANNELS = 6;
-                NUMCLUSTERS = 1;
-                NUMISOTOPOLOGUES = 6;
-            }
 
-            if (NEUCODE_SIXPLEX_MTRAQ || NEUCODE_SIXPLEX_ARG || NEUCODE_SIXPLEX_LEU)
+                if (NEUCODE_SIXPLEX_MTRAQ || NEUCODE_SIXPLEX_ARG || NEUCODE_SIXPLEX_LEU)
+                {
+                    NUMCLUSTERS = 3;
+                    NUMISOTOPOLOGUES = 2;
+
+                    if (NEUCODE_SIXPLEX_ARG && Conversion.Checked)
+                    {
+                        CORRECTARGPROLINE = true;
+                    }
+
+                    if (NEUCODE_SIXPLEX_LEU && Conversion.Checked)
+                    {
+                        CORRECTLEUDLOSS = true;
+                    }
+                }
+                else
+                {
+                    NUMCLUSTERS = 1;
+                    NUMISOTOPOLOGUES = 6;
+                }
+            }     
+
+            // 9-plex NeuCode
+            if (NEUCODE_9PLEX_MTRAQ)
             {
                 NEUCODE = true;
                 TRADITIONAL = false;
-                NUMCHANNELS = 6;
+                NUMCHANNELS = 9;
                 NUMCLUSTERS = 3;
-                NUMISOTOPOLOGUES = 6;
-
-                if (NEUCODE_SIXPLEX_ARG && Conversion.Checked)
-                {
-                    CORRECTARGPROLINE = true;
-                }
-
-                if (NEUCODE_SIXPLEX_LEU && Conversion.Checked)
-                {
-                    CORRECTLEUDLOSS = true;
-                }
+                NUMISOTOPOLOGUES = 3;
             }
 
-            if (NEUCODE_12PLEX)
+            // 12-plex NeuCode
+            if (NEUCODE_12PLEX || NEUCODE_12PLEX_MTRAQ)
+            {
+                NEUCODE = true;
+                TRADITIONAL = false;
+                NUMCHANNELS = 12;
+                NUMCLUSTERS = 3;
+                NUMISOTOPOLOGUES = 4;
+            }
+
+            // 18-plex NeuCode
+            if (NEUCODE_18PLEX_MTRAQ)
             {
                 NEUCODE = true;
                 TRADITIONAL = false;
@@ -412,30 +450,30 @@ namespace Coon.NeuQuant
                 }
                 else if (!NOISEBANDCAP)
                 {
-                    header1 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Adjusted Mass 1, Adjusted Mass 2, Quantified no NBC MS1 Scans, # no NBC Measurements, No NBC Intensity 1, No NBC Intensity 2, Ratio H/L, Ratio H/L Count");
+                    header1 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Adjusted Mass 1, Adjusted Mass 2, Resolvable?, Quantified MS1 Scans, # Measurements, Intensity 1, Intensity 2, Ratio 2/1, Ratio Count, Missing Channels?");
                     writer1.WriteLine(header1);
                     foreach (PeptideID peptide in allPeptides.Values)
                     {
-                        writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15}",
+                        writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17}",
                             peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.bestPSM.ScanNumber, peptide.sequence, peptide.numLabels,
                             peptide.theoMasses[0, 0], peptide.theoMasses[1, 0],
-                            peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], 
-                            peptide.countCompletePairs, peptide.countCompleteIsotopes[0], peptide.completeTotalIntensity[0, NUMISOTOPES], peptide.completeTotalIntensity[1, NUMISOTOPES], peptide.heavyToLightRatioSum[0, 0], peptide.finalQuantified[0]);
+                            peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.GetTheoreticalResolvability(0),
+                            peptide.countCompletePairs, peptide.countCompleteIsotopes[0], peptide.completeTotalIntensity[0, NUMISOTOPES], peptide.completeTotalIntensity[1, NUMISOTOPES], 
+                            peptide.heavyToLightRatioSum[0, 0], peptide.finalQuantified[0], peptide.quantifiedNoiseIncluded[0]);
                     }
                 }
                 else
                 {
-                    header1 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Adjusted Mass 1, Adjusted Mass 2, Quantified MS1 Scans, # Total Measurements, Total Intensity 1, Total Intensity 2, Quantified no NBC MS1 Scans, # no NBC Measurements, No NBC Intensity 1, No NBC Intensity 2, Coalescence Detected?, Ratio H/L, Ratio H/L Count, Missing Channels Quantified");
+                    header1 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Adjusted Mass 1, Adjusted Mass 2, Resolvable?, Quantified MS1 Scans, # Measurements, Intensity 1, Intensity 2, Ratio 2/1, Ratio Count, Missing Channels?");
                     writer1.WriteLine(header1);
                     foreach (PeptideID peptide in allPeptides.Values)
                     {
-                        writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21}",
+                        writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17}",
                             peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.bestPSM.ScanNumber, peptide.sequence, peptide.numLabels,
                             peptide.theoMasses[0, 0], peptide.theoMasses[1, 0],
-                            peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0],
-                            peptide.countAllPairs, peptide.countAllIsotopes[0], peptide.totalIntensity[0, NUMISOTOPES], peptide.totalIntensity[1, NUMISOTOPES],
-                            peptide.countCompletePairs, peptide.countCompleteIsotopes[0], peptide.completeTotalIntensity[0, NUMISOTOPES], peptide.completeTotalIntensity[1, NUMISOTOPES],
-                            peptide.coalescenceDetected, peptide.heavyToLightRatioSum[0, 0], peptide.finalQuantified[0], peptide.quantifiedNoiseIncluded[0]);
+                            peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.GetTheoreticalResolvability(0),
+                            peptide.countAllPairs, peptide.countAllIsotopes[0], peptide.totalIntensity[0, NUMISOTOPES], peptide.totalIntensity[1, NUMISOTOPES], 
+                            peptide.heavyToLightRatioSum[0, 0], peptide.finalQuantified[0], peptide.quantifiedNoiseIncluded[0]);
                     }
                 }
                 writer1.Close();
@@ -445,90 +483,232 @@ namespace Coon.NeuQuant
                 string header1;
                 if (!NOISEBANDCAP)
                 {
-                    header1 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Theo Mass 3, Adjusted Mass 1, Adjusted Mass 2, Adjusted Mass 3, MS1 Scans, MS1 Measurements, Intensity 1, Intensity 2, Intensity 3, Ratio 2/1, Ratio 3/1, Ratio Count");
+                    header1 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Theo Mass 3, Adjusted Mass 1, Adjusted Mass 2, Adjusted Mass 3, Resolvable?, Quantified MS1 Scans, # Measurements, Intensity 1, Intensity 2, Intensity 3, Ratio 2/1, Ratio 3/1, Ratio Count, Missing Channels?");
                     writer1.WriteLine(header1);
                     foreach (PeptideID peptide in allPeptides.Values)
                     {
-                        writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19}",
+                        writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21}",
                             peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.bestPSM.ScanNumber, peptide.sequence, peptide.numLabels,
                             peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], peptide.theoMasses[2,0],
-                            peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.adjustedTheoMasses[2,0], 
-                            peptide.countCompletePairs, peptide.countCompleteIsotopes[0], peptide.completeTotalIntensity[0, NUMISOTOPES], peptide.completeTotalIntensity[1, NUMISOTOPES], peptide.completeTotalIntensity[2,NUMISOTOPES], peptide.heavyToLightRatioSum[0, 0], peptide.heavyToLightRatioSum[1,0], peptide.finalQuantified[0]);
-                    }
-                }
-            }
-            else if (NUMCHANNELS == 4)
-            {
-                string header1;
-
-                if (!NOISEBANDCAP)
-                {
-                    header1 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Theo Mass 3, Theo Mass 4, Adjusted Mass 1, Adjusted Mass 2, Adjusted Mass 3, Adjusted Mass 4, MS1 Scans, MS1 Measurements, Intensity 1, Intensity 2, Intensity 3, Intensity 4, Ratio 2/1, Ratio 3/1, Ratio 4/1, Ratio Count");
-                    writer1.WriteLine(header1);
-                    foreach (PeptideID peptide in allPeptides.Values)
-                    {
-                        writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23}",
-                            peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.bestPSM.ScanNumber, peptide.sequence, peptide.numLabels,
-                            peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], peptide.theoMasses[2, 0], peptide.theoMasses[3,0],
-                            peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.adjustedTheoMasses[2, 0], peptide.adjustedTheoMasses[3,0],
-                            peptide.countCompletePairs, peptide.countCompleteIsotopes[0], peptide.completeTotalIntensity[0, NUMISOTOPES], peptide.completeTotalIntensity[1, NUMISOTOPES], peptide.completeTotalIntensity[2, NUMISOTOPES], peptide.completeTotalIntensity[3, NUMISOTOPES], peptide.heavyToLightRatioSum[0, 0], peptide.heavyToLightRatioSum[1, 0], peptide.heavyToLightRatioSum[2,0], peptide.finalQuantified[0]);
+                            peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.adjustedTheoMasses[2,0], peptide.GetTheoreticalResolvability(0),
+                            peptide.countCompletePairs, peptide.countCompleteIsotopes[0], peptide.completeTotalIntensity[0, NUMISOTOPES], peptide.completeTotalIntensity[1, NUMISOTOPES], peptide.completeTotalIntensity[2,NUMISOTOPES],
+                            peptide.heavyToLightRatioSum[0, 0], peptide.heavyToLightRatioSum[1,0], peptide.finalQuantified[0], peptide.quantifiedNoiseIncluded[0]);
                     }
                 }
                 else
                 {
-                    header1 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Theo Mass 3, Theo Mass 4, Adjusted Mass 1, Adjusted Mass 2, Adjusted Mass 3, Adjusted Mass 4, Quantified MS1 Scans, # Total Measurements, Total Intensity 1, Total Intensity 2, Total Intensity 3, Total Intensity 4, Quantified no NBC MS1 Scans, # no NBC Measurements, No NBC Intensity 1, No NBC Intensity 2, No NBC Intensity 3, No NBC Intensity 4, Coalescence Detected?, Ratio 1, Ratio 2, Ratio 3, Ratio Count, Missing Channels Quantified");
+                    header1 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Theo Mass 3, Adjusted Mass 1, Adjusted Mass 2, Adjusted Mass 3, Resolvable?, Quantified MS1 Scans, # Measurements, Intensity 1, Intensity 2, Intensity 3, Ratio 2/1, Ratio 3/1, Ratio Count, Missing Channels?");
                     writer1.WriteLine(header1);
-
                     foreach (PeptideID peptide in allPeptides.Values)
                     {
-                        writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25},{26},{27},{28},{29},{30},{31}",
+                        writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21}",
                             peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.bestPSM.ScanNumber, peptide.sequence, peptide.numLabels,
-                            peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], peptide.theoMasses[2, 0], peptide.theoMasses[3, 0],
-                            peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.adjustedTheoMasses[2, 0], peptide.adjustedTheoMasses[3, 0],
-                            peptide.countAllPairs, peptide.countAllIsotopes[0], peptide.totalIntensity[0, NUMISOTOPES], peptide.totalIntensity[1, NUMISOTOPES], peptide.totalIntensity[2, NUMISOTOPES], peptide.totalIntensity[3, NUMISOTOPES],
-                            peptide.countCompletePairs, peptide.countCompleteIsotopes[0], peptide.completeTotalIntensity[0, NUMISOTOPES], peptide.completeTotalIntensity[1, NUMISOTOPES], peptide.completeTotalIntensity[2, NUMISOTOPES], peptide.completeTotalIntensity[3, NUMISOTOPES],
-                            peptide.coalescenceDetected, peptide.heavyToLightRatioSum[0, 0], peptide.heavyToLightRatioSum[1, 0], peptide.heavyToLightRatioSum[2, 0], peptide.finalQuantified[0], peptide.quantifiedNoiseIncluded[0]);
+                            peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], peptide.theoMasses[2, 0],
+                            peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.adjustedTheoMasses[2, 0], peptide.GetTheoreticalResolvability(0),
+                            peptide.countAllPairs, peptide.countAllIsotopes[0], peptide.totalIntensity[0, NUMISOTOPES], peptide.totalIntensity[1, NUMISOTOPES], peptide.totalIntensity[2, NUMISOTOPES], 
+                            peptide.heavyToLightRatioSum[0, 0], peptide.heavyToLightRatioSum[1, 0], peptide.finalQuantified[0], peptide.quantifiedNoiseIncluded[0]);
                     }
                 }
+                writer1.Close();
+            }
+            else if (NUMCHANNELS == 4)
+            {
+                string header1;
+                if (!NOISEBANDCAP)
+                {
+                    header1 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Theo Mass 3, Theo Mass 4, Adjusted Mass 1, Adjusted Mass 2, Adjusted Mass 3, Adjusted Mass 4, Resolvable?, Quantified MS1 Scans, # Measurements, Intensity 1, Intensity 2, Intensity 3, Intensity 4, Ratio 2/1, Ratio 3/1, Ratio 4/1, Ratio Count, Missing Channels?");
+                    writer1.WriteLine(header1);
+                    foreach (PeptideID peptide in allPeptides.Values)
+                    {
+                        writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25}",
+                            peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.bestPSM.ScanNumber, peptide.sequence, peptide.numLabels,
+                            peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], peptide.theoMasses[2, 0], peptide.theoMasses[3,0],
+                            peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.adjustedTheoMasses[2, 0], peptide.adjustedTheoMasses[3,0], peptide.GetTheoreticalResolvability(0),
+                            peptide.countCompletePairs, peptide.countCompleteIsotopes[0], peptide.completeTotalIntensity[0, NUMISOTOPES], peptide.completeTotalIntensity[1, NUMISOTOPES], peptide.completeTotalIntensity[2, NUMISOTOPES], peptide.completeTotalIntensity[3,NUMISOTOPES], 
+                            peptide.heavyToLightRatioSum[0, 0], peptide.heavyToLightRatioSum[1, 0], peptide.heavyToLightRatioSum[2,0], peptide.finalQuantified[0], peptide.quantifiedNoiseIncluded[0]);
+                    }
+                }
+                else
+                {
+                    header1 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Theo Mass 3, Theo Mass 4, Adjusted Mass 1, Adjusted Mass 2, Adjusted Mass 3, Adjusted Mass 4, Resolvable?, Quantified MS1 Scans, # Measurements, Intensity 1, Intensity 2, Intensity 3, Intensity 4, Ratio 2/1, Ratio 3/1, Ratio 4/1, Ratio Count, Missing Channels?");
+                    writer1.WriteLine(header1);
+                    foreach (PeptideID peptide in allPeptides.Values)
+                    {
+                        writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25}",
+                            peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.bestPSM.ScanNumber, peptide.sequence, peptide.numLabels,
+                            peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], peptide.theoMasses[2, 0], peptide.theoMasses[3, 0],
+                            peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.adjustedTheoMasses[2, 0], peptide.adjustedTheoMasses[3, 0], peptide.GetTheoreticalResolvability(0),
+                            peptide.countAllPairs, peptide.countAllIsotopes[0], peptide.totalIntensity[0, NUMISOTOPES], peptide.totalIntensity[1, NUMISOTOPES], peptide.totalIntensity[2, NUMISOTOPES], peptide.totalIntensity[3, NUMISOTOPES], 
+                            peptide.heavyToLightRatioSum[0, 0], peptide.heavyToLightRatioSum[1, 0], peptide.heavyToLightRatioSum[2, 0], peptide.finalQuantified[0], peptide.quantifiedNoiseIncluded[0]);
+                    }
+                }
+                writer1.Close();
             }
             else if (NUMCHANNELS == 6)
             {
                 string header1;
-
                 if (!NOISEBANDCAP)
                 {
-                    header1 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Theo Mass 3, Theo Mass 4, Theo Mass 5, Theo Mass 6, Adjusted Mass 1, Adjusted Mass 2, Adjusted Mass 3, Adjusted Mass 4, Adjusted Mass 5, Adjusted Mass 6, MS1 Scans, MS1 Measurements, Intensity 1, Intensity 2, Intensity 3, Intensity 4, Intensity 5, Intensity 6, Ratio 2/1, Ratio 3/1, Ratio 4/1, Ratio 5/1, Ratio 6/1, Ratio Count");
+                    if (NEUCODE_SIXPLEX_LYS8_6MDA)
+                    {
+                        header1 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Theo Mass 3, Theo Mass 4, Theo Mass 5, Theo Mass 6, Adjusted Mass 1, Adjusted Mass 2, Adjusted Mass 3, Adjusted Mass 4, Adjusted Mass 5, Adjusted Mass 6, Resolvable?, Quantified MS1 Scans, # Measurements, Intensity 1, Intensity 2, Intensity 3, Intensity 4, Intensity 5, Intensity 6, Ratio 2/1, Ratio 3/1, Ratio 4/1, Ratio 5/1, Ratio 6/1, Ratio Count, Missing Channels?");
+                        writer1.WriteLine(header1);
+                        foreach (PeptideID peptide in allPeptides.Values)
+                        {
+                            writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25},{26},{27},{28},{29},{30},{31},{32},{33}",
+                                peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.bestPSM.ScanNumber, peptide.sequence, peptide.numLabels,
+                                peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], peptide.theoMasses[2, 0], peptide.theoMasses[3, 0], peptide.theoMasses[4,0], peptide.theoMasses[5,0],
+                                peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.adjustedTheoMasses[2, 0], peptide.adjustedTheoMasses[3, 0], peptide.adjustedTheoMasses[4,0], peptide.adjustedTheoMasses[5,0], peptide.GetTheoreticalResolvability(0),
+                                peptide.countCompletePairs, peptide.countCompleteIsotopes[0], peptide.completeTotalIntensity[0, NUMISOTOPES], peptide.completeTotalIntensity[1, NUMISOTOPES], peptide.completeTotalIntensity[2, NUMISOTOPES], peptide.completeTotalIntensity[3, NUMISOTOPES], peptide.completeTotalIntensity[4, NUMISOTOPES], peptide.completeTotalIntensity[5, NUMISOTOPES], 
+                                peptide.heavyToLightRatioSum[0, 0], peptide.heavyToLightRatioSum[1, 0], peptide.heavyToLightRatioSum[2, 0], peptide.heavyToLightRatioSum[3,0], peptide.heavyToLightRatioSum[4,0], peptide.finalQuantified[0], peptide.quantifiedNoiseIncluded[0]);
+                        }
+                    }
+                    else if (NEUCODE_SIXPLEX_MTRAQ)
+                    {
+                        header1 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Theo Mass 3, Theo Mass 4, Theo Mass 5, Theo Mass 6, Adjusted Mass 1, Adjusted Mass 2, Adjusted Mass 3, Adjusted Mass 4, Adjusted Mass 5, Adjusted Mass 6, Cluster 1 Resolvable?, Cluster 2 Resolvable?, Cluster 3 Resolvable?, Quantified MS1 Scans, Cluster 1 # Measurements, Cluster 2 # Measurements, Cluster 3 # Measurements, Intensity 1, Intensity 2, Intensity 3, Intensity 4, Intensity 5, Intensity 6, Ratio 2/1, Ratio 3/4, Ratio 5/6, Cluster 1 Ratio Count, Cluster 2 Ratio Count, Cluster 3 Ratio Count, Cluster 1 Missing Channels?, Cluster 2 Missing Channels?, Cluster 3 Missing Channels?");
+                        writer1.WriteLine(header1);
+                        foreach (PeptideID peptide in allPeptides.Values)
+                        {
+                            writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25},{26},{27},{28},{29},{30},{31},{32},{33},{34},{35},{36},{37},{38},{39}",
+                                peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.bestPSM.ScanNumber, peptide.sequence, peptide.numLabels,
+                                peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], peptide.theoMasses[2, 0], peptide.theoMasses[3, 0], peptide.theoMasses[4, 0], peptide.theoMasses[5, 0],
+                                peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.adjustedTheoMasses[2, 0], peptide.adjustedTheoMasses[3, 0], peptide.adjustedTheoMasses[4, 0], peptide.adjustedTheoMasses[5, 0], peptide.GetTheoreticalResolvability(0), peptide.GetTheoreticalResolvability(1), peptide.GetTheoreticalResolvability(2),
+                                peptide.countCompletePairs, peptide.countCompleteIsotopes[0], peptide.countCompleteIsotopes[1], peptide.countCompleteIsotopes[2], peptide.completeTotalIntensity[0, NUMISOTOPES], peptide.completeTotalIntensity[1, NUMISOTOPES], peptide.completeTotalIntensity[2, NUMISOTOPES], peptide.completeTotalIntensity[3, NUMISOTOPES], peptide.completeTotalIntensity[4, NUMISOTOPES], peptide.completeTotalIntensity[5, NUMISOTOPES], 
+                                peptide.heavyToLightRatioSum[0, 0], peptide.heavyToLightRatioSum[1, 0], peptide.heavyToLightRatioSum[2, 0], peptide.finalQuantified[0], peptide.finalQuantified[1], peptide.finalQuantified[2], peptide.quantifiedNoiseIncluded[0], peptide.quantifiedNoiseIncluded[1], peptide.quantifiedNoiseIncluded[2]);
+                        }
+                    }
+                }
+                else
+                {
+                    if (NEUCODE_SIXPLEX_LYS8_6MDA)
+                    {
+                        header1 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Theo Mass 3, Theo Mass 4, Theo Mass 5, Theo Mass 6, Adjusted Mass 1, Adjusted Mass 2, Adjusted Mass 3, Adjusted Mass 4, Adjusted Mass 5, Adjusted Mass 6, Resolvable?, Quantified MS1 Scans, # Measurements, Intensity 1, Intensity 2, Intensity 3, Intensity 4, Intensity 5, Intensity 6, Ratio 2/1, Ratio 3/1, Ratio 4/1, Ratio 5/1, Ratio 6/1, Ratio Count, Missing Channels?");
+                        writer1.WriteLine(header1);
+                        foreach (PeptideID peptide in allPeptides.Values)
+                        {
+                            writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25},{26},{27},{28},{29},{30},{31},{32},{33}",
+                                peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.bestPSM.ScanNumber, peptide.sequence, peptide.numLabels,
+                                peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], peptide.theoMasses[2, 0], peptide.theoMasses[3, 0], peptide.theoMasses[4, 0], peptide.theoMasses[5, 0],
+                                peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.adjustedTheoMasses[2, 0], peptide.adjustedTheoMasses[3, 0], peptide.adjustedTheoMasses[4, 0], peptide.adjustedTheoMasses[5, 0], peptide.GetTheoreticalResolvability(0),
+                                peptide.countAllPairs, peptide.countAllIsotopes[0], peptide.totalIntensity[0, NUMISOTOPES], peptide.totalIntensity[1, NUMISOTOPES], peptide.totalIntensity[2, NUMISOTOPES], peptide.totalIntensity[3, NUMISOTOPES], peptide.totalIntensity[4, NUMISOTOPES], peptide.totalIntensity[5, NUMISOTOPES],
+                                peptide.heavyToLightRatioSum[0, 0], peptide.heavyToLightRatioSum[1, 0], peptide.heavyToLightRatioSum[2, 0], peptide.heavyToLightRatioSum[3, 0], peptide.heavyToLightRatioSum[4, 0], peptide.finalQuantified[0], peptide.quantifiedNoiseIncluded[0]);
+                        }
+                    }
+                    else if (NEUCODE_SIXPLEX_MTRAQ)
+                    {
+                        header1 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Theo Mass 3, Theo Mass 4, Theo Mass 5, Theo Mass 6, Adjusted Mass 1, Adjusted Mass 2, Adjusted Mass 3, Adjusted Mass 4, Adjusted Mass 5, Adjusted Mass 6, Cluster 1 Resolvable?, Cluster 2 Resolvable?, Cluster 3 Resolvable?, Quantified MS1 Scans, Cluster 1 # Measurements, Cluster 2 # Measurements, Cluster 3 # Measurements, Intensity 1, Intensity 2, Intensity 3, Intensity 4, Intensity 5, Intensity 6, Ratio 2/1, Ratio 3/4, Ratio 5/6, Cluster 1 Ratio Count, Cluster 2 Ratio Count, Cluster 3 Ratio Count, Cluster 1 Missing Channels?, Cluster 2 Missing Channels?, Cluster 3 Missing Channels?");
+                        writer1.WriteLine(header1);
+                        foreach (PeptideID peptide in allPeptides.Values)
+                        {
+                            writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25},{26},{27},{28},{29},{30},{31},{32},{33},{34},{35},{36},{37},{38},{39}",
+                                peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.bestPSM.ScanNumber, peptide.sequence, peptide.numLabels,
+                                peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], peptide.theoMasses[2, 0], peptide.theoMasses[3, 0], peptide.theoMasses[4, 0], peptide.theoMasses[5, 0],
+                                peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.adjustedTheoMasses[2, 0], peptide.adjustedTheoMasses[3, 0], peptide.adjustedTheoMasses[4, 0], peptide.adjustedTheoMasses[5, 0], peptide.GetTheoreticalResolvability(0), peptide.GetTheoreticalResolvability(1), peptide.GetTheoreticalResolvability(2),
+                                peptide.countAllPairs, peptide.countAllIsotopes[0], peptide.countAllIsotopes[1], peptide.countAllIsotopes[2], peptide.totalIntensity[0, NUMISOTOPES], peptide.totalIntensity[1, NUMISOTOPES], peptide.totalIntensity[2, NUMISOTOPES], peptide.totalIntensity[3, NUMISOTOPES], peptide.totalIntensity[4, NUMISOTOPES], peptide.totalIntensity[5, NUMISOTOPES],
+                                peptide.heavyToLightRatioSum[0, 0], peptide.heavyToLightRatioSum[1, 0], peptide.heavyToLightRatioSum[2, 0], peptide.finalQuantified[0], peptide.finalQuantified[1], peptide.finalQuantified[2], peptide.quantifiedNoiseIncluded[0], peptide.quantifiedNoiseIncluded[1], peptide.quantifiedNoiseIncluded[2]);
+                        }
+                    }
+                }
+                writer1.Close();
+            }
+            else if (NUMCHANNELS == 9)
+            {
+                string header1;
+                if (!NOISEBANDCAP)
+                {
+                    header1 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Theo Mass 3, Theo Mass 4, Theo Mass 5, Theo Mass 6, Theo Mass 7, Theo Mass 8, Theo Mass 9, Adjusted Mass 1, Adjusted Mass 2, Adjusted Mass 3, Adjusted Mass 4, Adjusted Mass 5, Adjusted Mass 6, Adjusted Mass 7, Adjusted Mass 8, Adjusted Mass 9, Cluster 1 Resolvable?, Cluster 2 Resolvable?, Cluster 3 Resolvable?, Quantified MS1 Scans, Cluster 1 # Measurements, Cluster 2 # Measurements, Cluster 3 # Measurements, Intensity 1, Intensity 2, Intensity 3, Intensity 4, Intensity 5, Intensity 6, Intensity 7, Intensity 8, Intensity 9, Ratio 2/1, Ratio 3/1, Ratio 5/4, Ratio 6/4, Ratio 8/7, Ratio 9/7, Cluster 1 Ratio Count, Cluster 2 Ratio Count, Cluster 3 Ratio Count, Cluster 1 Missing Channels?, Cluster 2 Missing Channels?, Cluster 3 Missing Channels?");
                     writer1.WriteLine(header1);
                     foreach (PeptideID peptide in allPeptides.Values)
                     {
-                        writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25},{26},{27},{28},{29},{30},{31}",
+                        writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25},{26},{27},{28},{29},{30},{31},{32},{33},{34},{35},{36},{37},{38},{39},{40},{41},{42},{43},{44},{45},{46},{47},{48},{49},{50},{51}",
                             peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.bestPSM.ScanNumber, peptide.sequence, peptide.numLabels,
-                            peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], peptide.theoMasses[2, 0], peptide.theoMasses[3, 0], peptide.theoMasses[4,0], peptide.theoMasses[5,0],
-                            peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.adjustedTheoMasses[2, 0], peptide.adjustedTheoMasses[3, 0], peptide.adjustedTheoMasses[4,0], peptide.adjustedTheoMasses[5,0],
-                            peptide.countCompletePairs, peptide.countCompleteIsotopes[0], peptide.completeTotalIntensity[0, NUMISOTOPES], peptide.completeTotalIntensity[1, NUMISOTOPES], peptide.completeTotalIntensity[2, NUMISOTOPES], peptide.completeTotalIntensity[3, NUMISOTOPES], peptide.completeTotalIntensity[4, NUMISOTOPES], peptide.completeTotalIntensity[5, NUMISOTOPES], peptide.heavyToLightRatioSum[0, 0], peptide.heavyToLightRatioSum[1, 0], peptide.heavyToLightRatioSum[2, 0], peptide.heavyToLightRatioSum[3,0], peptide.heavyToLightRatioSum[4,0], peptide.finalQuantified[0]);
+                            peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], peptide.theoMasses[2, 0], peptide.theoMasses[3, 0], peptide.theoMasses[4, 0], peptide.theoMasses[5, 0], peptide.theoMasses[6,0], peptide.theoMasses[7,0], peptide.theoMasses[8,0],
+                            peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.adjustedTheoMasses[2, 0], peptide.adjustedTheoMasses[3, 0], peptide.adjustedTheoMasses[4, 0], peptide.adjustedTheoMasses[5, 0], peptide.adjustedTheoMasses[6,0], peptide.adjustedTheoMasses[7,0], peptide.adjustedTheoMasses[8,0], peptide.GetTheoreticalResolvability(0), peptide.GetTheoreticalResolvability(1), peptide.GetTheoreticalResolvability(2),
+                            peptide.countCompletePairs, peptide.countCompleteIsotopes[0], peptide.countCompleteIsotopes[1], peptide.countCompleteIsotopes[2], peptide.completeTotalIntensity[0, NUMISOTOPES], peptide.completeTotalIntensity[1, NUMISOTOPES], peptide.completeTotalIntensity[2, NUMISOTOPES], peptide.completeTotalIntensity[3, NUMISOTOPES], peptide.completeTotalIntensity[4, NUMISOTOPES], peptide.completeTotalIntensity[5, NUMISOTOPES], peptide.completeTotalIntensity[6, NUMISOTOPES], peptide.completeTotalIntensity[7, NUMISOTOPES], peptide.completeTotalIntensity[8, NUMISOTOPES],
+                            peptide.heavyToLightRatioSum[0, 0], peptide.heavyToLightRatioSum[1, 0], peptide.heavyToLightRatioSum[2, 0], peptide.heavyToLightRatioSum[3,0], peptide.heavyToLightRatioSum[4,0], peptide.heavyToLightRatioSum[5,0], peptide.finalQuantified[0], peptide.finalQuantified[1], peptide.finalQuantified[2], peptide.quantifiedNoiseIncluded[0], peptide.quantifiedNoiseIncluded[1], peptide.quantifiedNoiseIncluded[2]);
                     }
                 }
-            }
-            else if (NEUCODE_12PLEX)
-            {
-                string header2 = ("Scan number(s), Raw File(s), Charge State(s), Peptide, # Labels, Theo Mass 1, Theo Mass 2, Theo Mass 3, Theo Mass 4, Theo Mass 5, Theo Mass 6, Theo Mass 7, Theo Mass 8, Theo Mass 9, Theo Mass 10, Theo Mass 11, Theo Mass 12, Adjusted Mass 1, Adjusted Mass 2, Adjusted Mass 3, Adjusted Mass 4, Adjusted Mass 5, Adjusted Mass 6, Adjusted Mass 7, Adjusted Mass 8, Adjusted Mass 9, Adjusted Mass 10, Adjusted Mass 11, Adjusted Mass 12, Quantified MS1 Scans, # Total Measurements (Rep 1), # Total Measurements (Rep 2), # Total Measurements (Rep 3), Total Intensity 1, Total Intensity 2, Total Intensity 3, Total Intensity 4, Total Intensity 5, Total Intensity 6, Total Intensity 7, Total Intensity 8, Total Intensity 9, Total Intensity 10, Total Intensity 11, Total Intensity 12, Quantified no NBC MS1 Scans, # No NBC Measurements (Rep 1), # No NBC Measurements (Rep 2), # No NBC Measurements (Rep 3), No NBC Intensity 1, No NBC Intensity 2, No NBC Intensity 3, No NBC Intensity 4, No NBC Intensity 5, No NBC Intensity 6, No NBC Intensity 7, No NBC Intensity 8, No NBC Intensity 9, No NBC Intensity 10, No NBC Intensity 11, No NBC Intensity 12, Coalescence Detected?, Ratio 1 (Rep 1), Ratio 2 (Rep 1), Ratio 3 (Rep 1), Ratio Count (Rep 1), Missing Channels Quantified (Rep 1), Ratio 1 (Rep 2), Ratio 2 (Rep 2), Ratio 3 (Rep 2), Ratio Count (Rep 2), Missing Channels Quantified (Rep 2), Ratio 1 (Rep 3), Ratio 2 (Rep 3), Ratio 3 (Rep 3), Ratio Count (Rep 3), Missing Channels Quantified (Rep 3)");
-                writer1.WriteLine(header2);
-
-                foreach (PeptideID peptide in allPeptides.Values)
+                else
                 {
-                    writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25},{26},{27},{28},{29},{30},{31},{32},{33},{34},{35},{36},{37},{38},{39},{40},{41},{42},{43},{44},{45},{46},{47},{48},{49},{50},{51},{52},{53},{54},{55},{56},{57},{58},{59},{60},{61},{62},{63},{64},{65},{66},{67},{68},{69},{70},{71},{72},{73},{74},{75},{76}",
-                        peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.sequence, peptide.numLabels,
-                        peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], peptide.theoMasses[2, 0], peptide.theoMasses[3, 0], peptide.theoMasses[4, 0], peptide.theoMasses[5, 0], peptide.theoMasses[6, 0], peptide.theoMasses[7, 0], peptide.theoMasses[8, 0], peptide.theoMasses[9, 0], peptide.theoMasses[10, 0], peptide.theoMasses[11, 0],
-                        peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.adjustedTheoMasses[2, 0], peptide.adjustedTheoMasses[3, 0], peptide.adjustedTheoMasses[4, 0], peptide.adjustedTheoMasses[5, 0], peptide.adjustedTheoMasses[6, 0], peptide.adjustedTheoMasses[7, 0], peptide.adjustedTheoMasses[8, 0], peptide.adjustedTheoMasses[9, 0], peptide.adjustedTheoMasses[10, 0], peptide.adjustedTheoMasses[11, 0],
-                        peptide.countAllPairs, peptide.countAllIsotopes[0], peptide.countAllIsotopes[1], peptide.countAllIsotopes[2],
-                        peptide.totalIntensity[0, NUMISOTOPES], peptide.totalIntensity[1, NUMISOTOPES], peptide.totalIntensity[2, NUMISOTOPES], peptide.totalIntensity[3, NUMISOTOPES], peptide.totalIntensity[4, NUMISOTOPES], peptide.totalIntensity[5, NUMISOTOPES], peptide.totalIntensity[6, NUMISOTOPES], peptide.totalIntensity[7, NUMISOTOPES], peptide.totalIntensity[8, NUMISOTOPES], peptide.totalIntensity[9, NUMISOTOPES], peptide.totalIntensity[10, NUMISOTOPES], peptide.totalIntensity[11, NUMISOTOPES],
-                        peptide.countCompletePairs, peptide.countCompleteIsotopes[0], peptide.countCompleteIsotopes[1], peptide.countCompleteIsotopes[2],
-                        peptide.completeTotalIntensity[0, NUMISOTOPES], peptide.completeTotalIntensity[1, NUMISOTOPES], peptide.completeTotalIntensity[2, NUMISOTOPES], peptide.completeTotalIntensity[3, NUMISOTOPES], peptide.completeTotalIntensity[4, NUMISOTOPES], peptide.completeTotalIntensity[5, NUMISOTOPES], peptide.completeTotalIntensity[6, NUMISOTOPES], peptide.completeTotalIntensity[7, NUMISOTOPES], peptide.completeTotalIntensity[8, NUMISOTOPES], peptide.completeTotalIntensity[9, NUMISOTOPES], peptide.completeTotalIntensity[10, NUMISOTOPES], peptide.completeTotalIntensity[11, NUMISOTOPES],
-                        peptide.coalescenceDetected,
-                        peptide.heavyToLightRatioSum[0, 0], peptide.heavyToLightRatioSum[1, 0], peptide.heavyToLightRatioSum[2, 0], peptide.finalQuantified[0], peptide.quantifiedNoiseIncluded[0],
-                        peptide.heavyToLightRatioSum[3, 0], peptide.heavyToLightRatioSum[4, 0], peptide.heavyToLightRatioSum[5, 0], peptide.finalQuantified[1], peptide.quantifiedNoiseIncluded[1],
-                        peptide.heavyToLightRatioSum[6, 0], peptide.heavyToLightRatioSum[7, 0], peptide.heavyToLightRatioSum[8, 0], peptide.finalQuantified[2], peptide.quantifiedNoiseIncluded[2]);
+                    header1 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Theo Mass 3, Theo Mass 4, Theo Mass 5, Theo Mass 6, Theo Mass 7, Theo Mass 8, Theo Mass 9, Adjusted Mass 1, Adjusted Mass 2, Adjusted Mass 3, Adjusted Mass 4, Adjusted Mass 5, Adjusted Mass 6, Adjusted Mass 7, Adjusted Mass 8, Adjusted Mass 9, Cluster 1 Resolvable?, Cluster 2 Resolvable?, Cluster 3 Resolvable?, Quantified MS1 Scans, Cluster 1 # Measurements, Cluster 2 # Measurements, Cluster 3 # Measurements, Intensity 1, Intensity 2, Intensity 3, Intensity 4, Intensity 5, Intensity 6, Intensity 7, Intensity 8, Intensity 9, Ratio 2/1, Ratio 3/1, Ratio 5/4, Ratio 6/4, Ratio 8/7, Ratio 9/7, Cluster 1 Ratio Count, Cluster 2 Ratio Count, Cluster 3 Ratio Count, Cluster 1 Missing Channels?, Cluster 2 Missing Channels?, Cluster 3 Missing Channels?");
+                    writer1.WriteLine(header1);
+                    foreach (PeptideID peptide in allPeptides.Values)
+                    {
+                        writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25},{26},{27},{28},{29},{30},{31},{32},{33},{34},{35},{36},{37},{38},{39},{40},{41},{42},{43},{44},{45},{46},{47},{48},{49},{50},{51}",
+                            peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.bestPSM.ScanNumber, peptide.sequence, peptide.numLabels,
+                            peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], peptide.theoMasses[2, 0], peptide.theoMasses[3, 0], peptide.theoMasses[4, 0], peptide.theoMasses[5, 0], peptide.theoMasses[6, 0], peptide.theoMasses[7, 0], peptide.theoMasses[8, 0],
+                            peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.adjustedTheoMasses[2, 0], peptide.adjustedTheoMasses[3, 0], peptide.adjustedTheoMasses[4, 0], peptide.adjustedTheoMasses[5, 0], peptide.adjustedTheoMasses[6, 0], peptide.adjustedTheoMasses[7, 0], peptide.adjustedTheoMasses[8, 0], peptide.GetTheoreticalResolvability(0), peptide.GetTheoreticalResolvability(1), peptide.GetTheoreticalResolvability(2),
+                            peptide.countAllPairs, peptide.countAllIsotopes[0], peptide.countAllIsotopes[1], peptide.countAllIsotopes[2], peptide.totalIntensity[0, NUMISOTOPES], peptide.totalIntensity[1, NUMISOTOPES], peptide.totalIntensity[2, NUMISOTOPES], peptide.totalIntensity[3, NUMISOTOPES], peptide.totalIntensity[4, NUMISOTOPES], peptide.totalIntensity[5, NUMISOTOPES], peptide.totalIntensity[6, NUMISOTOPES], peptide.totalIntensity[7, NUMISOTOPES], peptide.totalIntensity[8, NUMISOTOPES],
+                            peptide.heavyToLightRatioSum[0, 0], peptide.heavyToLightRatioSum[1, 0], peptide.heavyToLightRatioSum[2, 0], peptide.heavyToLightRatioSum[3, 0], peptide.heavyToLightRatioSum[4, 0], peptide.heavyToLightRatioSum[5, 0], peptide.finalQuantified[0], peptide.finalQuantified[1], peptide.finalQuantified[2], peptide.quantifiedNoiseIncluded[0], peptide.quantifiedNoiseIncluded[1], peptide.quantifiedNoiseIncluded[2]);
+                    }
                 }
+                writer1.Close();
+            }
+            else if (NUMCHANNELS == 12)
+            {
+                string header1;
+                if (!NOISEBANDCAP)
+                {
+                    header1 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Theo Mass 3, Theo Mass 4, Theo Mass 5, Theo Mass 6, Theo Mass 7, Theo Mass 8, Theo Mass 9, Theo Mass 10, Theo Mass 11, Theo Mass 12, Adjusted Mass 1, Adjusted Mass 2, Adjusted Mass 3, Adjusted Mass 4, Adjusted Mass 5, Adjusted Mass 6, Adjusted Mass 7, Adjusted Mass 8, Adjusted Mass 9, Adjusted Mass 10, Adjusted Mass 11, Adjusted Mass 12, Cluster 1 Resolvable?, Cluster 2 Resolvable?, Cluster 3 Resolvable?, Quantified MS1 Scans, Cluster 1 # Measurements, Cluster 2 # Measurements, Cluster 3 # Measurements, Intensity 1, Intensity 2, Intensity 3, Intensity 4, Intensity 5, Intensity 6, Intensity 7, Intensity 8, Intensity 9, Intensity 10, Intensity 11, Intensity 12, Ratio 2/1, Ratio 3/1, Ratio 4/1, Ratio 6/5, Ratio 7/5, Ratio 8/5, Ratio 10/9, Ratio 11/9, Ratio 12/9, Cluster 1 Ratio Count, Cluster 2 Ratio Count, Cluster 3 Ratio Count, Cluster 1 Missing Channels?, Cluster 2 Missing Channels?, Cluster 3 Missing Channels?");
+                    writer1.WriteLine(header1);
+                    foreach (PeptideID peptide in allPeptides.Values)
+                    {
+                        writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25},{26},{27},{28},{29},{30},{31},{32},{33},{34},{35},{36},{37},{38},{39},{40},{41},{42},{43},{44},{45},{46},{47},{48},{49},{50},{51},{52},{53},{54},{55},{56},{57},{58},{59},{60},{61},{62},{63}",
+                            peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.bestPSM.ScanNumber, peptide.sequence, peptide.numLabels,
+                            peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], peptide.theoMasses[2, 0], peptide.theoMasses[3, 0], peptide.theoMasses[4, 0], peptide.theoMasses[5, 0], peptide.theoMasses[6, 0], peptide.theoMasses[7, 0], peptide.theoMasses[8, 0], peptide.theoMasses[9,0], peptide.theoMasses[10,0], peptide.theoMasses[11,0],
+                            peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.adjustedTheoMasses[2, 0], peptide.adjustedTheoMasses[3, 0], peptide.adjustedTheoMasses[4, 0], peptide.adjustedTheoMasses[5, 0], peptide.adjustedTheoMasses[6, 0], peptide.adjustedTheoMasses[7, 0], peptide.adjustedTheoMasses[8, 0], peptide.adjustedTheoMasses[9,0], peptide.adjustedTheoMasses[10,0], peptide.adjustedTheoMasses[11,0], peptide.GetTheoreticalResolvability(0), peptide.GetTheoreticalResolvability(1), peptide.GetTheoreticalResolvability(2),
+                            peptide.countCompletePairs, peptide.countCompleteIsotopes[0], peptide.countCompleteIsotopes[1], peptide.countCompleteIsotopes[2], peptide.completeTotalIntensity[0, NUMISOTOPES], peptide.completeTotalIntensity[1, NUMISOTOPES], peptide.completeTotalIntensity[2, NUMISOTOPES], peptide.completeTotalIntensity[3, NUMISOTOPES], peptide.completeTotalIntensity[4, NUMISOTOPES], peptide.completeTotalIntensity[5, NUMISOTOPES], peptide.completeTotalIntensity[6, NUMISOTOPES], peptide.completeTotalIntensity[7, NUMISOTOPES], peptide.completeTotalIntensity[8, NUMISOTOPES], peptide.completeTotalIntensity[9,NUMISOTOPES], peptide.completeTotalIntensity[10,NUMISOTOPES], peptide.completeTotalIntensity[11, NUMISOTOPES],
+                            peptide.heavyToLightRatioSum[0, 0], peptide.heavyToLightRatioSum[1, 0], peptide.heavyToLightRatioSum[2, 0], peptide.heavyToLightRatioSum[3, 0], peptide.heavyToLightRatioSum[4, 0], peptide.heavyToLightRatioSum[5, 0], peptide.heavyToLightRatioSum[6,0], peptide.heavyToLightRatioSum[7,0], peptide.heavyToLightRatioSum[8,0],peptide.finalQuantified[0], peptide.finalQuantified[1], peptide.finalQuantified[2], peptide.quantifiedNoiseIncluded[0], peptide.quantifiedNoiseIncluded[1], peptide.quantifiedNoiseIncluded[2]);
+                    }
+                }
+                else
+                {
+                    header1 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Theo Mass 3, Theo Mass 4, Theo Mass 5, Theo Mass 6, Theo Mass 7, Theo Mass 8, Theo Mass 9, Theo Mass 10, Theo Mass 11, Theo Mass 12, Adjusted Mass 1, Adjusted Mass 2, Adjusted Mass 3, Adjusted Mass 4, Adjusted Mass 5, Adjusted Mass 6, Adjusted Mass 7, Adjusted Mass 8, Adjusted Mass 9, Adjusted Mass 10, Adjusted Mass 11, Adjusted Mass 12, Cluster 1 Resolvable?, Cluster 2 Resolvable?, Cluster 3 Resolvable?, Quantified MS1 Scans, Cluster 1 # Measurements, Cluster 2 # Measurements, Cluster 3 # Measurements, Intensity 1, Intensity 2, Intensity 3, Intensity 4, Intensity 5, Intensity 6, Intensity 7, Intensity 8, Intensity 9, Intensity 10, Intensity 11, Intensity 12, Ratio 2/1, Ratio 3/1, Ratio 4/1, Ratio 6/5, Ratio 7/5, Ratio 8/5, Ratio 10/9, Ratio 11/9, Ratio 12/9, Cluster 1 Ratio Count, Cluster 2 Ratio Count, Cluster 3 Ratio Count, Cluster 1 Missing Channels?, Cluster 2 Missing Channels?, Cluster 3 Missing Channels?");
+                    writer1.WriteLine(header1);
+                    foreach (PeptideID peptide in allPeptides.Values)
+                    {
+                        writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25},{26},{27},{28},{29},{30},{31},{32},{33},{34},{35},{36},{37},{38},{39},{40},{41},{42},{43},{44},{45},{46},{47},{48},{49},{50},{51},{52},{53},{54},{55},{56},{57},{58},{59},{60},{61},{62},{63}",
+                            peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.bestPSM.ScanNumber, peptide.sequence, peptide.numLabels,
+                            peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], peptide.theoMasses[2, 0], peptide.theoMasses[3, 0], peptide.theoMasses[4, 0], peptide.theoMasses[5, 0], peptide.theoMasses[6, 0], peptide.theoMasses[7, 0], peptide.theoMasses[8, 0], peptide.theoMasses[9, 0], peptide.theoMasses[10, 0], peptide.theoMasses[11, 0],
+                            peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.adjustedTheoMasses[2, 0], peptide.adjustedTheoMasses[3, 0], peptide.adjustedTheoMasses[4, 0], peptide.adjustedTheoMasses[5, 0], peptide.adjustedTheoMasses[6, 0], peptide.adjustedTheoMasses[7, 0], peptide.adjustedTheoMasses[8, 0], peptide.adjustedTheoMasses[9, 0], peptide.adjustedTheoMasses[10, 0], peptide.adjustedTheoMasses[11, 0], peptide.GetTheoreticalResolvability(0), peptide.GetTheoreticalResolvability(1), peptide.GetTheoreticalResolvability(2),
+                            peptide.countAllPairs, peptide.countAllIsotopes[0], peptide.countAllIsotopes[1], peptide.countAllIsotopes[2], peptide.totalIntensity[0, NUMISOTOPES], peptide.totalIntensity[1, NUMISOTOPES], peptide.totalIntensity[2, NUMISOTOPES], peptide.totalIntensity[3, NUMISOTOPES], peptide.totalIntensity[4, NUMISOTOPES], peptide.totalIntensity[5, NUMISOTOPES], peptide.totalIntensity[6, NUMISOTOPES], peptide.totalIntensity[7, NUMISOTOPES], peptide.totalIntensity[8, NUMISOTOPES], peptide.totalIntensity[9, NUMISOTOPES], peptide.totalIntensity[10, NUMISOTOPES], peptide.totalIntensity[11, NUMISOTOPES],
+                            peptide.heavyToLightRatioSum[0, 0], peptide.heavyToLightRatioSum[1, 0], peptide.heavyToLightRatioSum[2, 0], peptide.heavyToLightRatioSum[3, 0], peptide.heavyToLightRatioSum[4, 0], peptide.heavyToLightRatioSum[5, 0], peptide.heavyToLightRatioSum[6, 0], peptide.heavyToLightRatioSum[7, 0], peptide.heavyToLightRatioSum[8, 0], peptide.finalQuantified[0], peptide.finalQuantified[1], peptide.finalQuantified[2], peptide.quantifiedNoiseIncluded[0], peptide.quantifiedNoiseIncluded[1], peptide.quantifiedNoiseIncluded[2]);
+                    }
+                }
+                writer1.Close();
+            }
+            else if (NUMCHANNELS == 18)
+            {
+                string header1;
+                if (!NOISEBANDCAP)
+                {
+                    header1 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Theo Mass 3, Theo Mass 4, Theo Mass 5, Theo Mass 6, Theo Mass 7, Theo Mass 8, Theo Mass 9, Theo Mass 10, Theo Mass 11, Theo Mass 12, Theo Mass 13, Theo Mass 14, Theo Mass 15, Theo Mass 16, Theo Mass 17, Theo  Mass 18, Adjusted Mass 1, Adjusted Mass 2, Adjusted Mass 3, Adjusted Mass 4, Adjusted Mass 5, Adjusted Mass 6, Adjusted Mass 7, Adjusted Mass 8, Adjusted Mass 9, Adjusted Mass 10, Adjusted Mass 11, Adjusted Mass 12, Adjusted Mass 13, Adjusted Mass 14, Adjusted Mass 15, Adjusted Mass 16, Adjusted Mass 17, Adjusted Mass 18, Cluster 1 Resolvable?, Cluster 2 Resolvable?, Cluster 3 Resolvable?, Quantified MS1 Scans, Cluster 1 # Measurements, Cluster 2 # Measurements, Cluster 3 # Measurements, Intensity 1, Intensity 2, Intensity 3, Intensity 4, Intensity 5, Intensity 6, Intensity 7, Intensity 8, Intensity 9, Intensity 10, Intensity 11, Intensity 12, Intensity 13, Intensity 14, Intensity 15, Intensity 16, Intensity 17, Intensity 18, Ratio 2/1, Ratio 3/1, Ratio 4/1, Ratio 5/1, Ratio 6/1, Ratio 8/7, Ratio 9/7, Ratio 10/7, Ratio 11/7, Ratio 12/7, Ratio 14/13, Ratio 15/13, Ratio 16/13, Ratio 17/13, Ratio 18/13, Cluster 1 Ratio Count, Cluster 2 Ratio Count, Cluster 3 Ratio Count, Cluster 1 Missing Channels?, Cluster 2 Missing Channels?, Cluster 3 Missing Channels?");
+                    writer1.WriteLine(header1);
+                    foreach (PeptideID peptide in allPeptides.Values)
+                    {
+                        writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25},{26},{27},{28},{29},{30},{31},{32},{33},{34},{35},{36},{37},{38},{39},{40},{41},{42},{43},{44},{45},{46},{47},{48},{49},{50},{51},{52},{53},{54},{55},{56},{57},{58},{59},{60},{61},{62},{63},{64},{65},{66},{67},{68},{69},{70},{71},{72},{73},{74},{75},{76},{77},{78},{79},{80},{81},{82},{83},{84},{85},{86},{87}",
+                            peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.bestPSM.ScanNumber, peptide.sequence, peptide.numLabels,
+                            peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], peptide.theoMasses[2, 0], peptide.theoMasses[3, 0], peptide.theoMasses[4, 0], peptide.theoMasses[5, 0], peptide.theoMasses[6, 0], peptide.theoMasses[7, 0], peptide.theoMasses[8, 0], peptide.theoMasses[9, 0], peptide.theoMasses[10, 0], peptide.theoMasses[11, 0], peptide.theoMasses[12,0], peptide.theoMasses[13,0], peptide.theoMasses[14,0], peptide.theoMasses[15,0], peptide.theoMasses[16,0], peptide.theoMasses[17,0],
+                            peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.adjustedTheoMasses[2, 0], peptide.adjustedTheoMasses[3, 0], peptide.adjustedTheoMasses[4, 0], peptide.adjustedTheoMasses[5, 0], peptide.adjustedTheoMasses[6, 0], peptide.adjustedTheoMasses[7, 0], peptide.adjustedTheoMasses[8, 0], peptide.adjustedTheoMasses[9, 0], peptide.adjustedTheoMasses[10, 0], peptide.adjustedTheoMasses[11, 0], peptide.adjustedTheoMasses[12,0], peptide.adjustedTheoMasses[13,0], peptide.adjustedTheoMasses[14,0], peptide.adjustedTheoMasses[15,0], peptide.adjustedTheoMasses[16,0], peptide.adjustedTheoMasses[17,0], peptide.GetTheoreticalResolvability(0), peptide.GetTheoreticalResolvability(1), peptide.GetTheoreticalResolvability(2),
+                            peptide.countCompletePairs, peptide.countCompleteIsotopes[0], peptide.countCompleteIsotopes[1], peptide.countCompleteIsotopes[2], peptide.completeTotalIntensity[0, NUMISOTOPES], peptide.completeTotalIntensity[1, NUMISOTOPES], peptide.completeTotalIntensity[2, NUMISOTOPES], peptide.completeTotalIntensity[3, NUMISOTOPES], peptide.completeTotalIntensity[4, NUMISOTOPES], peptide.completeTotalIntensity[5, NUMISOTOPES], peptide.completeTotalIntensity[6, NUMISOTOPES], peptide.completeTotalIntensity[7, NUMISOTOPES], peptide.completeTotalIntensity[8, NUMISOTOPES], peptide.completeTotalIntensity[9, NUMISOTOPES], peptide.completeTotalIntensity[10, NUMISOTOPES], peptide.completeTotalIntensity[11, NUMISOTOPES], peptide.completeTotalIntensity[12, NUMISOTOPES], peptide.completeTotalIntensity[13, NUMISOTOPES], peptide.completeTotalIntensity[14,0], peptide.completeTotalIntensity[15,0], peptide.completeTotalIntensity[16,0], peptide.completeTotalIntensity[17,0],
+                            peptide.heavyToLightRatioSum[0, 0], peptide.heavyToLightRatioSum[1, 0], peptide.heavyToLightRatioSum[2, 0], peptide.heavyToLightRatioSum[3, 0], peptide.heavyToLightRatioSum[4, 0], peptide.heavyToLightRatioSum[5, 0], peptide.heavyToLightRatioSum[6, 0], peptide.heavyToLightRatioSum[7, 0], peptide.heavyToLightRatioSum[8, 0], peptide.heavyToLightRatioSum[9,0], peptide.heavyToLightRatioSum[10,0], peptide.heavyToLightRatioSum[11,0], peptide.heavyToLightRatioSum[12,0], peptide.heavyToLightRatioSum[13,0], peptide.heavyToLightRatioSum[14,0], peptide.finalQuantified[0], peptide.finalQuantified[1], peptide.finalQuantified[2], peptide.quantifiedNoiseIncluded[0], peptide.quantifiedNoiseIncluded[1], peptide.quantifiedNoiseIncluded[2]);
+                    }
+                }
+                else
+                {
+                    header1 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Theo Mass 3, Theo Mass 4, Theo Mass 5, Theo Mass 6, Theo Mass 7, Theo Mass 8, Theo Mass 9, Theo Mass 10, Theo Mass 11, Theo Mass 12, Theo Mass 13, Theo Mass 14, Theo Mass 15, Theo Mass 16, Theo Mass 17, Theo  Mass 18, Adjusted Mass 1, Adjusted Mass 2, Adjusted Mass 3, Adjusted Mass 4, Adjusted Mass 5, Adjusted Mass 6, Adjusted Mass 7, Adjusted Mass 8, Adjusted Mass 9, Adjusted Mass 10, Adjusted Mass 11, Adjusted Mass 12, Adjusted Mass 13, Adjusted Mass 14, Adjusted Mass 15, Adjusted Mass 16, Adjusted Mass 17, Adjusted Mass 18, Cluster 1 Resolvable?, Cluster 2 Resolvable?, Cluster 3 Resolvable?, Quantified MS1 Scans, Cluster 1 # Measurements, Cluster 2 # Measurements, Cluster 3 # Measurements, Intensity 1, Intensity 2, Intensity 3, Intensity 4, Intensity 5, Intensity 6, Intensity 7, Intensity 8, Intensity 9, Intensity 10, Intensity 11, Intensity 12, Intensity 13, Intensity 14, Intensity 15, Intensity 16, Intensity 17, Intensity 18, Ratio 2/1, Ratio 3/1, Ratio 4/1, Ratio 5/1, Ratio 6/1, Ratio 8/7, Ratio 9/7, Ratio 10/7, Ratio 11/7, Ratio 12/7, Ratio 14/13, Ratio 15/13, Ratio 16/13, Ratio 17/13, Ratio 18/13, Cluster 1 Ratio Count, Cluster 2 Ratio Count, Cluster 3 Ratio Count, Cluster 1 Missing Channels?, Cluster 2 Missing Channels?, Cluster 3 Missing Channels?");
+                    writer1.WriteLine(header1);
+                    foreach (PeptideID peptide in allPeptides.Values)
+                    {
+                        writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25},{26},{27},{28},{29},{30},{31},{32},{33},{34},{35},{36},{37},{38},{39},{40},{41},{42},{43},{44},{45},{46},{47},{48},{49},{50},{51},{52},{53},{54},{55},{56},{57},{58},{59},{60},{61},{62},{63},{64},{65},{66},{67},{68},{69},{70},{71},{72},{73},{74},{75},{76},{77},{78},{79},{80},{81},{82},{83},{84},{85},{86},{87}",
+                            peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.bestPSM.ScanNumber, peptide.sequence, peptide.numLabels,
+                            peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], peptide.theoMasses[2, 0], peptide.theoMasses[3, 0], peptide.theoMasses[4, 0], peptide.theoMasses[5, 0], peptide.theoMasses[6, 0], peptide.theoMasses[7, 0], peptide.theoMasses[8, 0], peptide.theoMasses[9, 0], peptide.theoMasses[10, 0], peptide.theoMasses[11, 0], peptide.theoMasses[12, 0], peptide.theoMasses[13, 0], peptide.theoMasses[14, 0], peptide.theoMasses[15, 0], peptide.theoMasses[16, 0], peptide.theoMasses[17, 0],
+                            peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.adjustedTheoMasses[2, 0], peptide.adjustedTheoMasses[3, 0], peptide.adjustedTheoMasses[4, 0], peptide.adjustedTheoMasses[5, 0], peptide.adjustedTheoMasses[6, 0], peptide.adjustedTheoMasses[7, 0], peptide.adjustedTheoMasses[8, 0], peptide.adjustedTheoMasses[9, 0], peptide.adjustedTheoMasses[10, 0], peptide.adjustedTheoMasses[11, 0], peptide.adjustedTheoMasses[12, 0], peptide.adjustedTheoMasses[13, 0], peptide.adjustedTheoMasses[14, 0], peptide.adjustedTheoMasses[15, 0], peptide.adjustedTheoMasses[16, 0], peptide.adjustedTheoMasses[17, 0], peptide.GetTheoreticalResolvability(0), peptide.GetTheoreticalResolvability(1), peptide.GetTheoreticalResolvability(2),
+                            peptide.countAllPairs, peptide.countAllIsotopes[0], peptide.countAllIsotopes[1], peptide.countAllIsotopes[2], peptide.totalIntensity[0, NUMISOTOPES], peptide.totalIntensity[1, NUMISOTOPES], peptide.totalIntensity[2, NUMISOTOPES], peptide.totalIntensity[3, NUMISOTOPES], peptide.totalIntensity[4, NUMISOTOPES], peptide.totalIntensity[5, NUMISOTOPES], peptide.totalIntensity[6, NUMISOTOPES], peptide.totalIntensity[7, NUMISOTOPES], peptide.totalIntensity[8, NUMISOTOPES], peptide.totalIntensity[9, NUMISOTOPES], peptide.totalIntensity[10, NUMISOTOPES], peptide.totalIntensity[11, NUMISOTOPES], peptide.totalIntensity[12, NUMISOTOPES], peptide.totalIntensity[13, NUMISOTOPES], peptide.totalIntensity[14, 0], peptide.totalIntensity[15, 0], peptide.totalIntensity[16, 0], peptide.totalIntensity[17, 0],
+                            peptide.heavyToLightRatioSum[0, 0], peptide.heavyToLightRatioSum[1, 0], peptide.heavyToLightRatioSum[2, 0], peptide.heavyToLightRatioSum[3, 0], peptide.heavyToLightRatioSum[4, 0], peptide.heavyToLightRatioSum[5, 0], peptide.heavyToLightRatioSum[6, 0], peptide.heavyToLightRatioSum[7, 0], peptide.heavyToLightRatioSum[8, 0], peptide.heavyToLightRatioSum[9, 0], peptide.heavyToLightRatioSum[10, 0], peptide.heavyToLightRatioSum[11, 0], peptide.heavyToLightRatioSum[12, 0], peptide.heavyToLightRatioSum[13, 0], peptide.heavyToLightRatioSum[14, 0], peptide.finalQuantified[0], peptide.finalQuantified[1], peptide.finalQuantified[2], peptide.quantifiedNoiseIncluded[0], peptide.quantifiedNoiseIncluded[1], peptide.quantifiedNoiseIncluded[2]);
+                    }
+                }
+                writer1.Close();
             }
             /*else if (NEUCODE_ARG_PROLINECONVERSION)
             {
@@ -546,56 +726,56 @@ namespace Coon.NeuQuant
                         peptide.coalescenceDetected, peptide.heavyToLightRatioSum[0, 0], peptide.heavyToLightRatioSum[1, 0], peptide.finalQuantified, peptide.quantifiedNBC);
                 }
             }*/
-            else if (NEUCODE_SIXPLEX_MTRAQ)
-            {
-                string header2 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Theo Mass 3, Theo Mass 4, Theo Mass 5, Theo Mass 6, Adjusted Mass 1, Adjusted Mass 2, Adjusted Mass 3, Adjusted Mass 4, Adjusted Mass 5, Adjusted Mass 6, Quantified MS1 Scans, # Total Measurements (Rep 1), # Total Measurements (Rep 2), # Total Measurements (Rep 3), Total Intensity 1, Total Intensity 2, Total Intensity 3, Total Intensity 4, Total Intensity 5, Total Intensity 6, Quantified no NBC MS1 Scans, # No NBC Measurements (Rep 1), # No NBC Measurements (Rep 2), # No NBC Measurements (Rep 3), No NBC Intensity 1, No NBC Intensity 2, No NBC Intensity 3, No NBC Intensity 4, No NBC Intensity 5, No NBC Intensity 6, Coalescence Detected?, Ratio (Rep 1), Ratio Count (Rep 1), Missing Channels Quantified (Rep 1), Ratio (Rep 2), Ratio Count (Rep 2), Missing Channels Quantified (Rep 2), Ratio (Rep 3), Ratio Count (Rep 3), Missing Channels Quantified (Rep 3)");
-                writer1.WriteLine(header2);
+            //else if (NEUCODE_SIXPLEX_MTRAQ)
+            //{
+            //    string header2 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Theo Mass 3, Theo Mass 4, Theo Mass 5, Theo Mass 6, Adjusted Mass 1, Adjusted Mass 2, Adjusted Mass 3, Adjusted Mass 4, Adjusted Mass 5, Adjusted Mass 6, Quantified MS1 Scans, # Total Measurements (Rep 1), # Total Measurements (Rep 2), # Total Measurements (Rep 3), Total Intensity 1, Total Intensity 2, Total Intensity 3, Total Intensity 4, Total Intensity 5, Total Intensity 6, Quantified no NBC MS1 Scans, # No NBC Measurements (Rep 1), # No NBC Measurements (Rep 2), # No NBC Measurements (Rep 3), No NBC Intensity 1, No NBC Intensity 2, No NBC Intensity 3, No NBC Intensity 4, No NBC Intensity 5, No NBC Intensity 6, Coalescence Detected?, Ratio (Rep 1), Ratio Count (Rep 1), Missing Channels Quantified (Rep 1), Ratio (Rep 2), Ratio Count (Rep 2), Missing Channels Quantified (Rep 2), Ratio (Rep 3), Ratio Count (Rep 3), Missing Channels Quantified (Rep 3)");
+            //    writer1.WriteLine(header2);
 
-                foreach (PeptideID peptide in allPeptides.Values)
-                {
-                    writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25},{26},{27},{28},{29},{30},{31},{32},{33},{34},{35},{36},{37},{38},{39},{40},{41},{42},{43},{44},{45},{46},{47}",
-                        peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.bestPSM.ScanNumber, peptide.sequence, peptide.numLabels,
-                        peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], peptide.theoMasses[2, 0], peptide.theoMasses[3, 0], peptide.theoMasses[4, 0], peptide.theoMasses[5, 0],
-                        peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.adjustedTheoMasses[2, 0], peptide.adjustedTheoMasses[3, 0], peptide.adjustedTheoMasses[4, 0], peptide.adjustedTheoMasses[5, 0],
-                        peptide.countAllPairs, peptide.countAllIsotopes[0], peptide.countAllIsotopes[1], peptide.countAllIsotopes[2],
-                        peptide.totalIntensity[0, NUMISOTOPES], peptide.totalIntensity[1, NUMISOTOPES], peptide.totalIntensity[2, NUMISOTOPES], peptide.totalIntensity[3, NUMISOTOPES], peptide.totalIntensity[4, NUMISOTOPES], peptide.totalIntensity[5, NUMISOTOPES],
-                        peptide.countCompletePairs, peptide.countCompleteIsotopes[0], peptide.countCompleteIsotopes[1], peptide.countCompleteIsotopes[2],
-                        peptide.completeTotalIntensity[0, NUMISOTOPES], peptide.completeTotalIntensity[1, NUMISOTOPES], peptide.completeTotalIntensity[2, NUMISOTOPES], peptide.completeTotalIntensity[3, NUMISOTOPES], peptide.completeTotalIntensity[4, NUMISOTOPES], peptide.completeTotalIntensity[5, NUMISOTOPES],
-                        peptide.coalescenceDetected,
-                        peptide.heavyToLightRatioSum[0, 0], peptide.finalQuantified[0], peptide.quantifiedNoiseIncluded[0],
-                        peptide.heavyToLightRatioSum[1, 0], peptide.finalQuantified[1], peptide.quantifiedNoiseIncluded[1],
-                        peptide.heavyToLightRatioSum[2, 0], peptide.finalQuantified[2], peptide.quantifiedNoiseIncluded[2]);
-                }
-            }
-            else
-            {
-                string header3 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # K, # R, Light R Light Theo Mass, Light R Heavy Theo Mass, Light R Adjusted Light Theo Mass, Light R Adjusted Heavy Theo Mass, Medium R Light Theo Mass, Medium R Heavy Theo Mass, Medium R Adjusted Light Theo Mass, Medium R Adjusted Heavy Theo Mass, Heavy R Light Theo Mass, Heavy R Heavy Theo Mass, Heavy R Adjusted Light Theo Mass, Heavy R Adjusted Heavy Theo Mass, Quantified MS1 Scans, # Total Measurements, Total Light R Light Intensity, Total Light R Heavy Intensity, Total Medium R Light Intensity, Total Medium R Heavy Intensity, Total Heavy R Light Intensity, Total Heavy R Heavy Intensity, Quantified no NBC MS1 Scans, # No NBC Measurements (Rep 1), # No NBC Measurements (Rep 2), # No NBC Measurements (Rep 3), Light R Light no NBC Intensity, Light R Heavy no NBC Intensity, Medium R Light no NBC Intensity, Medium R Heavy no NBC Intensity, Heavy R Light no NBC Intensity, Coalescence Detected?, Ratio (Rep 1), Ratio Count (Rep 1), Missing Channels Quantified (Rep 1), Ratio (Rep 2), Ratio Count (Rep 2), Missing Channels Quantified (Rep 2), Ratio (Rep 3), Ratio Count (Rep 3), Missing Channels Quantified (Rep 3)");
-                writer1.WriteLine(header3);
+            //    foreach (PeptideID peptide in allPeptides.Values)
+            //    {
+            //        writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25},{26},{27},{28},{29},{30},{31},{32},{33},{34},{35},{36},{37},{38},{39},{40},{41},{42},{43},{44},{45},{46},{47}",
+            //            peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.bestPSM.ScanNumber, peptide.sequence, peptide.numLabels,
+            //            peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], peptide.theoMasses[2, 0], peptide.theoMasses[3, 0], peptide.theoMasses[4, 0], peptide.theoMasses[5, 0],
+            //            peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.adjustedTheoMasses[2, 0], peptide.adjustedTheoMasses[3, 0], peptide.adjustedTheoMasses[4, 0], peptide.adjustedTheoMasses[5, 0],
+            //            peptide.countAllPairs, peptide.countAllIsotopes[0], peptide.countAllIsotopes[1], peptide.countAllIsotopes[2],
+            //            peptide.totalIntensity[0, NUMISOTOPES], peptide.totalIntensity[1, NUMISOTOPES], peptide.totalIntensity[2, NUMISOTOPES], peptide.totalIntensity[3, NUMISOTOPES], peptide.totalIntensity[4, NUMISOTOPES], peptide.totalIntensity[5, NUMISOTOPES],
+            //            peptide.countCompletePairs, peptide.countCompleteIsotopes[0], peptide.countCompleteIsotopes[1], peptide.countCompleteIsotopes[2],
+            //            peptide.completeTotalIntensity[0, NUMISOTOPES], peptide.completeTotalIntensity[1, NUMISOTOPES], peptide.completeTotalIntensity[2, NUMISOTOPES], peptide.completeTotalIntensity[3, NUMISOTOPES], peptide.completeTotalIntensity[4, NUMISOTOPES], peptide.completeTotalIntensity[5, NUMISOTOPES],
+            //            peptide.coalescenceDetected,
+            //            peptide.heavyToLightRatioSum[0, 0], peptide.finalQuantified[0], peptide.quantifiedNoiseIncluded[0],
+            //            peptide.heavyToLightRatioSum[1, 0], peptide.finalQuantified[1], peptide.quantifiedNoiseIncluded[1],
+            //            peptide.heavyToLightRatioSum[2, 0], peptide.finalQuantified[2], peptide.quantifiedNoiseIncluded[2]);
+            //    }
+            //}
+            //else
+            //{
+            //    string header3 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # K, # R, Light R Light Theo Mass, Light R Heavy Theo Mass, Light R Adjusted Light Theo Mass, Light R Adjusted Heavy Theo Mass, Medium R Light Theo Mass, Medium R Heavy Theo Mass, Medium R Adjusted Light Theo Mass, Medium R Adjusted Heavy Theo Mass, Heavy R Light Theo Mass, Heavy R Heavy Theo Mass, Heavy R Adjusted Light Theo Mass, Heavy R Adjusted Heavy Theo Mass, Quantified MS1 Scans, # Total Measurements, Total Light R Light Intensity, Total Light R Heavy Intensity, Total Medium R Light Intensity, Total Medium R Heavy Intensity, Total Heavy R Light Intensity, Total Heavy R Heavy Intensity, Quantified no NBC MS1 Scans, # No NBC Measurements (Rep 1), # No NBC Measurements (Rep 2), # No NBC Measurements (Rep 3), Light R Light no NBC Intensity, Light R Heavy no NBC Intensity, Medium R Light no NBC Intensity, Medium R Heavy no NBC Intensity, Heavy R Light no NBC Intensity, Coalescence Detected?, Ratio (Rep 1), Ratio Count (Rep 1), Missing Channels Quantified (Rep 1), Ratio (Rep 2), Ratio Count (Rep 2), Missing Channels Quantified (Rep 2), Ratio (Rep 3), Ratio Count (Rep 3), Missing Channels Quantified (Rep 3)");
+            //    writer1.WriteLine(header3);
 
-                foreach (PeptideID peptide in allPeptides.Values)
-                {
-                    if (peptide.countResidues('R', peptide.sequence) == 0)
-                    {
-                        writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25},{26},{27},{28},{29},{30},{31},{32},{33},{34},{35},{36},{37},{38},{39},{40}",
-                        peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.bestPSM.ScanNumber, peptide.sequence, peptide.countResidues('K', peptide.sequence), 0,
-                        peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], 0, 0, 0, 0,
-                        peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], 0, 0, 0, 0,
-                        peptide.countAllPairs, peptide.countAllIsotopes, peptide.totalIntensity[0, NUMISOTOPES], peptide.totalIntensity[1, NUMISOTOPES], 0, 0, 0, 0,
-                        peptide.countCompletePairs, peptide.countCompleteIsotopes, peptide.completeTotalIntensity[0, NUMISOTOPES], peptide.completeTotalIntensity[1, NUMISOTOPES], 0, 0, 0, 0,
-                        peptide.coalescenceDetected, peptide.heavyToLightRatioSum[0, 0], 0, 0, peptide.finalQuantified, peptide.quantifiedNoiseIncluded);
-                    }
-                    else
-                    {
-                        writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25},{26},{27},{28},{29},{30},{31},{32},{33},{34},{35},{36},{37},{38},{39},{40}",
-                        peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.bestPSM.ScanNumber, peptide.sequence, peptide.countResidues('K', peptide.sequence), peptide.countResidues('R', peptide.sequence),
-                        peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], peptide.theoMasses[2, 0], peptide.theoMasses[3, 0], peptide.theoMasses[4, 0], peptide.theoMasses[5, 0],
-                        peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.adjustedTheoMasses[2, 0], peptide.adjustedTheoMasses[3, 0], peptide.adjustedTheoMasses[4, 0], peptide.adjustedTheoMasses[5, 0],
-                        peptide.countAllPairs, peptide.countAllIsotopes, peptide.totalIntensity[0, NUMISOTOPES], peptide.totalIntensity[1, NUMISOTOPES], peptide.totalIntensity[2, NUMISOTOPES], peptide.totalIntensity[3, NUMISOTOPES], peptide.totalIntensity[4, NUMISOTOPES], peptide.totalIntensity[5, NUMISOTOPES],
-                        peptide.countCompletePairs, peptide.countCompleteIsotopes, peptide.completeTotalIntensity[0, NUMISOTOPES], peptide.completeTotalIntensity[1, NUMISOTOPES], peptide.completeTotalIntensity[2, NUMISOTOPES], peptide.completeTotalIntensity[3, NUMISOTOPES], peptide.completeTotalIntensity[4, NUMISOTOPES], peptide.completeTotalIntensity[5, NUMISOTOPES],
-                        peptide.coalescenceDetected, peptide.heavyToLightRatioSum[0, 0], peptide.heavyToLightRatioSum[1, 0], peptide.heavyToLightRatioSum[2, 0], peptide.finalQuantified, peptide.quantifiedNoiseIncluded);
-                    }
-                }
-            }
+            //    foreach (PeptideID peptide in allPeptides.Values)
+            //    {
+            //        if (peptide.countResidues('R', peptide.sequence) == 0)
+            //        {
+            //            writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25},{26},{27},{28},{29},{30},{31},{32},{33},{34},{35},{36},{37},{38},{39},{40}",
+            //            peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.bestPSM.ScanNumber, peptide.sequence, peptide.countResidues('K', peptide.sequence), 0,
+            //            peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], 0, 0, 0, 0,
+            //            peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], 0, 0, 0, 0,
+            //            peptide.countAllPairs, peptide.countAllIsotopes, peptide.totalIntensity[0, NUMISOTOPES], peptide.totalIntensity[1, NUMISOTOPES], 0, 0, 0, 0,
+            //            peptide.countCompletePairs, peptide.countCompleteIsotopes, peptide.completeTotalIntensity[0, NUMISOTOPES], peptide.completeTotalIntensity[1, NUMISOTOPES], 0, 0, 0, 0,
+            //            peptide.coalescenceDetected, peptide.heavyToLightRatioSum[0, 0], 0, 0, peptide.finalQuantified, peptide.quantifiedNoiseIncluded);
+            //        }
+            //        else
+            //        {
+            //            writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25},{26},{27},{28},{29},{30},{31},{32},{33},{34},{35},{36},{37},{38},{39},{40}",
+            //            peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.bestPSM.ScanNumber, peptide.sequence, peptide.countResidues('K', peptide.sequence), peptide.countResidues('R', peptide.sequence),
+            //            peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], peptide.theoMasses[2, 0], peptide.theoMasses[3, 0], peptide.theoMasses[4, 0], peptide.theoMasses[5, 0],
+            //            peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.adjustedTheoMasses[2, 0], peptide.adjustedTheoMasses[3, 0], peptide.adjustedTheoMasses[4, 0], peptide.adjustedTheoMasses[5, 0],
+            //            peptide.countAllPairs, peptide.countAllIsotopes, peptide.totalIntensity[0, NUMISOTOPES], peptide.totalIntensity[1, NUMISOTOPES], peptide.totalIntensity[2, NUMISOTOPES], peptide.totalIntensity[3, NUMISOTOPES], peptide.totalIntensity[4, NUMISOTOPES], peptide.totalIntensity[5, NUMISOTOPES],
+            //            peptide.countCompletePairs, peptide.countCompleteIsotopes, peptide.completeTotalIntensity[0, NUMISOTOPES], peptide.completeTotalIntensity[1, NUMISOTOPES], peptide.completeTotalIntensity[2, NUMISOTOPES], peptide.completeTotalIntensity[3, NUMISOTOPES], peptide.completeTotalIntensity[4, NUMISOTOPES], peptide.completeTotalIntensity[5, NUMISOTOPES],
+            //            peptide.coalescenceDetected, peptide.heavyToLightRatioSum[0, 0], peptide.heavyToLightRatioSum[1, 0], peptide.heavyToLightRatioSum[2, 0], peptide.finalQuantified, peptide.quantifiedNoiseIncluded);
+            //        }
+            //    }
+            //}
             writer1.Close();
         }
 
@@ -604,7 +784,7 @@ namespace Coon.NeuQuant
          */
         private void readCsvInputFile(Dictionary<string, PeptideID> allPeptides)
         {
-            //Amino acids
+            // Amino acids
             NamedChemicalFormula K602 = NamedChemicalFormula.AddModification("C-6 C{13}6 N-2 N{15}2", "Lys +8 13C6 15N2");
             NamedChemicalFormula K422 = NamedChemicalFormula.AddModification("C-4 C{13}4 H-2 H{2}2 N-2 N{15}2", "Lys +8 13C4 2H2 15N2");
             NamedChemicalFormula K521 = NamedChemicalFormula.AddModification("C-5 C{13}5 H-2 H{2}2 N-1 N{15}2", "Lys +8 13C5 2H2 15N1");
@@ -620,30 +800,44 @@ namespace Coon.NeuQuant
             NamedChemicalFormula L600 = NamedChemicalFormula.AddModification("C-6 C{13}6", "Leu +6 13C6");
             NamedChemicalFormula L0100 = NamedChemicalFormula.AddModification("H-10 H{2}10", "Leu +10 2H10");
 
-            //Chemical labels
-            NamedChemicalFormula lightmTRAQ = NamedChemicalFormula.AddModification("H{1}12C{12}7N{14}2O{16}1", "mTRAQ L");
-            NamedChemicalFormula lightmTRAQK13C15N = NamedChemicalFormula.AddModification("H{1}12C{12}7N{14}2O{16}1C-6C{13}6N-2N{15}2", "mTRAQ L Lys +8 13C6 15N2");
-            NamedChemicalFormula lightmTRAQK2H = NamedChemicalFormula.AddModification("H{1}12C{12}7N{14}2O{16}1H-8H{2}8", "mTRAQ L Lys +8 2H8");
-            NamedChemicalFormula mediummTRAQ = NamedChemicalFormula.AddModification("H{1}12C{12}4C{13}3N{14}1N{15}1O{16}1", "mTRAQ M");
-            NamedChemicalFormula mediummTRAQK13C15N = NamedChemicalFormula.AddModification("H{1}12C{12}4C{13}3N{14}1N{15}1O{16}1C-6C{13}6N-2N{15}2", "mTRAQ M Lys +8 13C6 15N2");
-            NamedChemicalFormula mediummTRAQK2H = NamedChemicalFormula.AddModification("H{1}12C{12}4C{13}3N{14}1N{15}1O{16}1H-8H{2}8", "mTRAQ M Lys +8 2H8");
-            NamedChemicalFormula heavymTRAQ = NamedChemicalFormula.AddModification("H{1}12C{12}1C{13}6N{15}2O{16}1", "mTRAQ H");
-            NamedChemicalFormula heavymTRAQK13C15N = NamedChemicalFormula.AddModification("H{1}12C{12}1C{13}6N{15}2O{16}1C-6C{13}6N-2N{15}2", "mTRAQ H Lys +8 13C6 15N2");
-            NamedChemicalFormula heavymTRAQK2H = NamedChemicalFormula.AddModification("H{1}12C{12}1C{13}6N{15}2O{16}1H-8H{2}8", "mTRAQ H Lys +8 2H8");
+            // mTRAQ labels
+            NamedChemicalFormula lightmTRAQ = NamedChemicalFormula.AddModification("H{1}12 C{12}7 N{14}2 O{16}1", "mTRAQ L");
+            NamedChemicalFormula lightmTRAQK602 = NamedChemicalFormula.AddModification("H{1}12 C{12}7 N{14}2 O{16}1 C-6 C{13}6 N-2 N{15}2", "mTRAQ L Lys +8 13C6 15N2");
+            NamedChemicalFormula lightmTRAQK422 = NamedChemicalFormula.AddModification("H{1}12 C{12}7 N{14}2 O{16}1 C-4 C{13}4 H-4 H{2}4 N-2 N{15}2", "mTRAQ L Lys +8 13C4 2H4 15N2");
+            NamedChemicalFormula lightmTRAQK521 = NamedChemicalFormula.AddModification("H{1}12 C{12}7 N{14}2 O{16}1 C-6 C{13}5 H-2 H{2}2 N-1 N{15}1", "mTRAQ L Lys +8 13C5 2H2 15N1");
+            NamedChemicalFormula lightmTRAQK062 = NamedChemicalFormula.AddModification("H{1}12 C{12}7 N{14}2 O{16}1 H-6 H{2}6 N-2 N{15}2", "mTRAQ L Lys +8 2H6 15N2");
+            NamedChemicalFormula lightmTRAQK440 = NamedChemicalFormula.AddModification("H{1}12 C{12}7 N{14}2 O{16}1 C-4 C{13}4 H-4 H{2}4", "mTRAQ L Lys +8 13C4 2H4");
+            NamedChemicalFormula lightmTRAQK080 = NamedChemicalFormula.AddModification("H{1}12 C{12}7 N{14}2 O{16}1 H-8 H{2}8", "mTRAQ L Lys +8 2H8");
+            NamedChemicalFormula mediummTRAQ = NamedChemicalFormula.AddModification("H{1}12 C{12}4 C{13}3 N{14}1 N{15}1 O{16}1", "mTRAQ M");
+            NamedChemicalFormula mediummTRAQ602 = NamedChemicalFormula.AddModification("H{1}12 C{12}4 C{13}3 N{14}1 N{15}1 O{16}1 C-6 C{13}6 N-2 N{15}2", "mTRAQ M Lys +8 13C6 15N2");
+            NamedChemicalFormula mediummTRAQK422 = NamedChemicalFormula.AddModification("H{1}12 C{12}4 C{13}3 N{14}1 N{15}1 O{16}1 C-4 C{13}4 H-4 H{2}4 N-2 N{15}2", "mTRAQ M Lys +8 13C4 2H4 15N2");
+            NamedChemicalFormula mediummTRAQK521 = NamedChemicalFormula.AddModification("H{1}12 C{12}4 C{13}3 N{14}1 N{15}1 O{16}1 C-6 C{13}5 H-2 H{2}2 N-1 N{15}1", "mTRAQ M Lys +8 13C5 2H2 15N1");
+            NamedChemicalFormula mediummTRAQK062 = NamedChemicalFormula.AddModification("H{1}12 C{12}4 C{13}3 N{14}1 N{15}1 O{16}1 H-6 H{2}6 N-2 N{15}2", "mTRAQ M Lys +8 2H6 15N2");
+            NamedChemicalFormula mediummTRAQK440 = NamedChemicalFormula.AddModification("H{1}12 C{12}4 C{13}3 N{14}1 N{15}1 O{16}1 C-4 C{13}4 H-4 H{2}4", "mTRAQ M Lys +8 13C4 2H4");
+            NamedChemicalFormula mediummTRAQK080 = NamedChemicalFormula.AddModification("H{1}12 C{12}4 C{13}3 N{14}1 N{15}1 O{16}1 H-8 H{2}8", "mTRAQ M Lys +8 2H8");
+            NamedChemicalFormula heavymTRAQ = NamedChemicalFormula.AddModification("H{1}12 C{12}1 C{13}6 N{15}2 O{16}1", "mTRAQ H");
+            NamedChemicalFormula heavymTRAQK602 = NamedChemicalFormula.AddModification("H{1}12 C{12}1 C{13}6 N{15}2 O{16}1 C-6 C{13}6 N-2 N{15}2", "mTRAQ H Lys +8 13C6 15N2");
+            NamedChemicalFormula heavymTRAQK422 = NamedChemicalFormula.AddModification("H{1}12 C{12}1 C{13}6 N{14}2 N{15}1 O{16}1 C-4 C{13}4 H-4 H{2}4 N-2 N{15}2", "mTRAQ H Lys +8 13C4 2H4 15N2");
+            NamedChemicalFormula heavymTRAQK521 = NamedChemicalFormula.AddModification("H{1}12 C{12}1 C{13}6 N{14}2 N{15}1 O{16}1 C-6 C{13}5 H-2 H{2}2 N-1 N{15}1", "mTRAQ H Lys +8 13C5 2H2 15N1");
+            NamedChemicalFormula heavymTRAQK062 = NamedChemicalFormula.AddModification("H{1}12 C{12}1 C{13}6 N{14}2 N{15}1 O{16}1 H-6 H{2}6 N-2 N{15}2", "mTRAQ H Lys +8 2H6 15N2");
+            NamedChemicalFormula heavymTRAQK440 = NamedChemicalFormula.AddModification("H{1}12 C{12}1 C{13}6 N{14} N{15}1 O{16}1 C-4 C{13}4 H-4 H{2}4", "mTRAQ H Lys +8 13C4 2H4");
+            NamedChemicalFormula heavymTRAQK080 = NamedChemicalFormula.AddModification("H{1}12 C{12}1 C{13}6 N{15}2 O{16}1 H-8 H{2}8", "mTRAQ H Lys +8 2H8");
+            
+            // Chemical labels
             NamedChemicalFormula lightASH1 = NamedChemicalFormula.AddModification("C{12}18 H{1}31 N{14}1 O{16}5 N{15}6", "4plex L1");
             NamedChemicalFormula lightASH2 = NamedChemicalFormula.AddModification("C{12}16 H{1}31 N{14}3 O{16}5 N{15}4 C{13}2", "4plex L2");
             NamedChemicalFormula lightASH3 = NamedChemicalFormula.AddModification("C{12}14 H{1}31 N{14}5 O{16}5 N{15}2 C{13}4", "4plex L3");
             NamedChemicalFormula lightASH4 = NamedChemicalFormula.AddModification("C{12}12 H{1}31 N{14}7 O{16}5 C{13}6", "4plex L4");
-            NamedChemicalFormula mediumASH1 = NamedChemicalFormula.AddModification("C{12}14H{1}31N{14}1O{16}5N{15}6C{13}4", "4plex M1");
-            NamedChemicalFormula mediumASH2 = NamedChemicalFormula.AddModification("C{12}12H{1}31N{14}1O{16}5N{15}4C{13}6", "4plex M2");
-            NamedChemicalFormula mediumASH3 = NamedChemicalFormula.AddModification("C{12}10H{1}31N{14}1O{16}5N{15}2C{13}8", "4plex M3");
-            NamedChemicalFormula mediumASH4 = NamedChemicalFormula.AddModification("C{12}8H{1}31N{14}1O{16}5C{13}10", "4plex M4");
-            NamedChemicalFormula heavyASH1 = NamedChemicalFormula.AddModification("C{12}10H{1}31N{14}1O{16}5N{15}6C{13}8", "4plex H1");
-            NamedChemicalFormula heavyASH2 = NamedChemicalFormula.AddModification("C{12}8H{1}31N{14}1O{16}5N{15}4C{13}10", "4plex H2");
-            NamedChemicalFormula heavyASH3 = NamedChemicalFormula.AddModification("C{12}6H{1}31N{14}1O{16}5N{15}2C{13}12", "4plex H3");
-            NamedChemicalFormula heavyASH4 = NamedChemicalFormula.AddModification("C{12}4H{1}31N{14}1O{16}5C{13}14", "4plex H4");
-            NamedChemicalFormula lightCarbamyl = NamedChemicalFormula.AddModification("C{12}1N{15}1H{1}2O{16}1", "Carbamyl L");
-            NamedChemicalFormula heavyCarbamyl = NamedChemicalFormula.AddModification("C{13}1N{14}1H{1}2O{16}1", "Carbamyl H");
+            NamedChemicalFormula mediumASH1 = NamedChemicalFormula.AddModification("C{12}14 H{1}31 N{14}1 O{16}5 N{15}6 C{13}4", "4plex M1");
+            NamedChemicalFormula mediumASH2 = NamedChemicalFormula.AddModification("C{12}12 H{1}31 N{14}1 O{16}5 N{15}4 C{13}6", "4plex M2");
+            NamedChemicalFormula mediumASH3 = NamedChemicalFormula.AddModification("C{12}10 H{1}31 N{14}1 O{16}5 N{15}2 C{13}8", "4plex M3");
+            NamedChemicalFormula mediumASH4 = NamedChemicalFormula.AddModification("C{12}8 H{1}31 N{14}1 O{16}5 C{13}10", "4plex M4");
+            NamedChemicalFormula heavyASH1 = NamedChemicalFormula.AddModification("C{12}10 H{1}31 N{14}1 O{16}5 N{15}6 C{13}8", "4plex H1");
+            NamedChemicalFormula heavyASH2 = NamedChemicalFormula.AddModification("C{12}8 H{1}31 N{14}1 O{16}5 N{15}4 C{13}10", "4plex H2");
+            NamedChemicalFormula heavyASH3 = NamedChemicalFormula.AddModification("C{12}6 H{1}31 N{14}1 O{16}5 N{15}2 C{13}12", "4plex H3");
+            NamedChemicalFormula heavyASH4 = NamedChemicalFormula.AddModification("C{12}4 H{1}31 N{14}1 O{16}5 C{13}14", "4plex H4");
+            NamedChemicalFormula lightCarbamyl = NamedChemicalFormula.AddModification("C{12}1 N{15}1 H{1}2 O{16}1", "Carbamyl L");
+            NamedChemicalFormula heavyCarbamyl = NamedChemicalFormula.AddModification("C{13}1 N{14}1 H{1}2 O{16}1", "Carbamyl H");
 
             HashSet<string> rawFiles = new HashSet<string>();
 
@@ -870,11 +1064,6 @@ namespace Coon.NeuQuant
         }
 
         private void Form1_Load(object sender, EventArgs e)
-        {
-
-        }
-
-        private void NeuCodeLysLeu_CheckedChanged(object sender, EventArgs e)
         {
 
         }
