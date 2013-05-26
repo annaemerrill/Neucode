@@ -19,8 +19,9 @@ namespace Coon.NeuQuant
         public static MassTolerance NEUCODE = new MassTolerance(MassToleranceType.PPM, 10.0); // Individual NeuCode peak tolerance (for higher resolution MS1 scans)
         public static double INTENSITYCUTOFF = 1.0 / (2.0 * Math.E); // Intensity threshold for quantitation filtering to eliminate low-level peaks
         public static double SIGNALTONOISE = Form1.MINIMUMSN;
-        public static double QUANTRESOLUTION = Form1.QUANTRESOLUTION;
+        public static double QUANTRESOLUTION = Form1.QUANTRESOLUTION * 1000.0;
         public static double QUANTSEPARATION = Form1.THEORETICALSEPARATION;
+        public static double SPACINGPERCENTAGEERROR = 0.50;
 
         // Class members
         // Experimental design information
@@ -177,27 +178,6 @@ namespace Coon.NeuQuant
         } // Theoretical masses of each peptide isotopologue after adjustment for systematic error
         public Range<double> rTRange; // Retention time window within which to look for MS1 scans
         public List<MSDataScan> fullScanList; // List of MS1 scans in which to look for peaks
-        //public int bestPSMScanNumber
-        //{
-        //    get
-        //    {
-        //        int overallBestSN = 0;
-        //        double lowestEValue = 100;
-        //        if (PSMs != null && PSMs.Count > 0)
-        //        {
-        //            foreach (List<PeptideSpectralMatch> psms in PSMs.Values)
-        //            {
-        //                psms.OrderBy(PSM => PSM.EValue);
-        //                if (psms[0].EValue < lowestEValue)
-        //                {
-        //                    lowestEValue = psms[0].EValue;
-        //                    overallBestSN = psms[0].ScanNumber;
-        //                }
-        //            }
-        //        }
-        //        return overallBestSN;
-        //    }
-        //} // Finds the scan number with the best E-value
         
         // Quantification information
         public int peaksNeeded
@@ -251,7 +231,6 @@ namespace Coon.NeuQuant
             get
             {
                 double[,] max = null;
-                double injectionTime;
                 MSDataFile rawFile;
                 List<Pair> pairs;
                 if (allPairs != null && allPairs.Count > 0)
@@ -263,14 +242,13 @@ namespace Coon.NeuQuant
                         pairs = kvp.Value;
                         foreach (Pair pair in pairs)
                         {
-                            injectionTime = rawFile.GetInjectionTime(pair.scanNumber);
                             for (int i = 0; i < numChannels; i++)
                             {
                                 for (int j = 0; j < numIsotopes; j++)
                                 {
-                                    if (pair.peaks[i,j] != null && pair.peaks[i, j].GetDenormalizedIntensity(injectionTime) > max[i, 0])
+                                    if (pair.peaks[i,j] != null && pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime) > max[i, 0])
                                     {
-                                        max[i, 0] = pair.peaks[i, j].GetDenormalizedIntensity(injectionTime);
+                                        max[i, 0] = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
                                         max[i, 1] = pair.rawFile[pair.scanNumber].RetentionTime; 
                                     }
                                 }
@@ -286,7 +264,6 @@ namespace Coon.NeuQuant
             get
             {
                 double[,] max = null;
-                double injectionTime;
                 MSDataFile rawFile;
                 List<Pair> pairs;
                 if (completePairs != null && completePairs.Count > 0)
@@ -315,7 +292,7 @@ namespace Coon.NeuQuant
                 return max;
             }
         }
-        public double maximumIntensity // Considering all isotopologues from all pairs, finds the peptide's maximum intensity
+        public double log10MaxIntensity // Considering all isotopologues from all pairs, finds the peptide's maximum intensity
         {
             get
             {
@@ -333,7 +310,7 @@ namespace Coon.NeuQuant
                 return Math.Log10(max);
             }
         }
-        public double maximumCompleteIntensity // Considering all isotopologues from complete pairs, finds the peptide's maximum intensity
+        public double log10MaxCompleteIntensity // Considering all isotopologues from complete pairs, finds the peptide's maximum intensity
         {
             get
             {
@@ -427,10 +404,10 @@ namespace Coon.NeuQuant
                                             channelCount++;
                                         }
                                     }
-                                    //if ((Form1.NEUCODE_ARG_PROLINECONVERSION && channelCount > 0) || channelCount == numIsotopologues)
-                                    //{
-                                    //    count[c]++;
-                                    //}
+                                    if (channelCount == numIsotopologues)
+                                    {
+                                        count[c]++;
+                                    }
                                 }
                             }
                         }
@@ -505,7 +482,6 @@ namespace Coon.NeuQuant
             }
         }
         public bool[] quantifiedNoiseIncluded;
-        public bool quantified;
         public int[] finalQuantified;
         public MassRange[] spacingMassRange
         {
@@ -529,11 +505,11 @@ namespace Coon.NeuQuant
                             theoSpacing3 = (double)numLabels * (4 * (Constants.DEUTERIUM - Constants.HYDROGEN) + (Constants.NITROGEN15 - Constants.NITROGEN) - 5 * (Constants.CARBON13 - Constants.CARBON));
                             theoSpacing4 = (double)numLabels * (4 * (Constants.CARBON13 - Constants.CARBON) - 2 * (Constants.DEUTERIUM - Constants.HYDROGEN) - 2 * (Constants.NITROGEN15 - Constants.NITROGEN));
                             theoSpacing5 = (double)numLabels * (4 * (Constants.DEUTERIUM - Constants.HYDROGEN) - 4 * (Constants.CARBON13 - Constants.CARBON));
-                            spacing[0] = new MassRange(theoSpacing1, new MassTolerance(MassToleranceType.DA, 0.5 * theoSpacing1));
-                            spacing[1] = new MassRange(theoSpacing2, new MassTolerance(MassToleranceType.DA, 0.5 * theoSpacing2));
-                            spacing[2] = new MassRange(theoSpacing3, new MassTolerance(MassToleranceType.DA, 0.5 * theoSpacing3));
-                            spacing[3] = new MassRange(theoSpacing4, new MassTolerance(MassToleranceType.DA, 0.5 * theoSpacing4));
-                            spacing[4] = new MassRange(theoSpacing5, new MassTolerance(MassToleranceType.DA, 0.5 * theoSpacing5));
+                            spacing[0] = new MassRange(theoSpacing1, new MassTolerance(MassToleranceType.DA, SPACINGPERCENTAGEERROR * theoSpacing1));
+                            spacing[1] = new MassRange(theoSpacing2, new MassTolerance(MassToleranceType.DA, SPACINGPERCENTAGEERROR * theoSpacing2));
+                            spacing[2] = new MassRange(theoSpacing3, new MassTolerance(MassToleranceType.DA, SPACINGPERCENTAGEERROR * theoSpacing3));
+                            spacing[3] = new MassRange(theoSpacing4, new MassTolerance(MassToleranceType.DA, SPACINGPERCENTAGEERROR * theoSpacing4));
+                            spacing[4] = new MassRange(theoSpacing5, new MassTolerance(MassToleranceType.DA, SPACINGPERCENTAGEERROR * theoSpacing5));
                         }
                         else if (numIsotopologues == 4)
                         {
@@ -542,16 +518,16 @@ namespace Coon.NeuQuant
                                 theoSpacing1 = (double)numLabels * (2 * (Constants.DEUTERIUM - Constants.HYDROGEN) - (Constants.NITROGEN15 - Constants.NITROGEN) - (Constants.CARBON13 - Constants.CARBON));
                                 theoSpacing2 = theoSpacing1;
                                 theoSpacing3 = (double)numLabels * (4 * (Constants.DEUTERIUM - Constants.HYDROGEN) - 4 * (Constants.CARBON13 - Constants.CARBON));
-                                spacing[0] = new MassRange(theoSpacing1, new MassTolerance(MassToleranceType.DA, 0.5 * theoSpacing1));
+                                spacing[0] = new MassRange(theoSpacing1, new MassTolerance(MassToleranceType.DA, SPACINGPERCENTAGEERROR * theoSpacing1));
                                 spacing[1] = spacing[0];
-                                spacing[2] = new MassRange(theoSpacing3, new MassTolerance(MassToleranceType.DA, 0.5 * theoSpacing3));
+                                spacing[2] = new MassRange(theoSpacing3, new MassTolerance(MassToleranceType.DA, SPACINGPERCENTAGEERROR * theoSpacing3));
                             }
                             else
                             {
                                 theoSpacing1 = (double)numLabels * (2 * (Constants.CARBON13 - Constants.CARBON) - 2 * (Constants.NITROGEN15 - Constants.NITROGEN));
                                 theoSpacing2 = theoSpacing1;
                                 theoSpacing3 = theoSpacing1;
-                                spacing[0] = new MassRange(theoSpacing1, new MassTolerance(MassToleranceType.DA, 0.5 * theoSpacing1));
+                                spacing[0] = new MassRange(theoSpacing1, new MassTolerance(MassToleranceType.DA, SPACINGPERCENTAGEERROR * theoSpacing1));
                                 spacing[1] = spacing[0];
                                 spacing[2] = spacing[1];
                             }
@@ -560,13 +536,13 @@ namespace Coon.NeuQuant
                         {
                             theoSpacing1 = (double)numLabels * (6 * (Constants.DEUTERIUM - Constants.HYDROGEN) - 6 * (Constants.CARBON13 - Constants.CARBON));
                             theoSpacing2 = (double)numLabels * (2 * (Constants.DEUTERIUM - Constants.HYDROGEN) - 2 * (Constants.NITROGEN15 - Constants.NITROGEN));
-                            spacing[0] = new MassRange(theoSpacing1, new MassTolerance(MassToleranceType.DA, 0.5 * theoSpacing1));
-                            spacing[1] = new MassRange(theoSpacing2, new MassTolerance(MassToleranceType.DA, 0.5 * theoSpacing2));
+                            spacing[0] = new MassRange(theoSpacing1, new MassTolerance(MassToleranceType.DA, SPACINGPERCENTAGEERROR * theoSpacing1));
+                            spacing[1] = new MassRange(theoSpacing2, new MassTolerance(MassToleranceType.DA, SPACINGPERCENTAGEERROR * theoSpacing2));
                         }
                         else if (Form1.NEUCODE_DUPLEX_LYS1_6MDA || Form1.NEUCODE_DUPLEX_CARBAMYL)
                         {
                             theoSpacing1 = (double)numLabels * ((Constants.CARBON13 - Constants.CARBON) - (Constants.NITROGEN15 - Constants.NITROGEN));
-                            spacing[0] = new MassRange(theoSpacing1, new MassTolerance(MassToleranceType.DA, 0.5 * theoSpacing1));
+                            spacing[0] = new MassRange(theoSpacing1, new MassTolerance(MassToleranceType.DA, SPACINGPERCENTAGEERROR * theoSpacing1));
                         }
                         else if (Form1.NEUCODE_DUPLEX_LEU7_18MDA)
                         {
@@ -578,12 +554,12 @@ namespace Coon.NeuQuant
                             {
                                 theoSpacing1 = (double)numLabels * (7 * (Constants.DEUTERIUM - Constants.HYDROGEN) - (6 * (Constants.CARBON13 - Constants.CARBON) + (1 * (Constants.NITROGEN15 - Constants.NITROGEN))));
                             }
-                            spacing[0] = new MassRange(theoSpacing1, new MassTolerance(MassToleranceType.DA, 0.5 * theoSpacing1));
+                            spacing[0] = new MassRange(theoSpacing1, new MassTolerance(MassToleranceType.DA, SPACINGPERCENTAGEERROR * theoSpacing1));
                         }
                         else
                         {
                             theoSpacing1 = (double)numLabels * (8 * (Constants.DEUTERIUM - Constants.HYDROGEN) - (6 * (Constants.CARBON13 - Constants.CARBON) + (2 * (Constants.NITROGEN15 - Constants.NITROGEN))));
-                            spacing[0] = new MassRange(theoSpacing1, new MassTolerance(MassToleranceType.DA, 0.010 * numLabels));
+                            spacing[0] = new MassRange(theoSpacing1, new MassTolerance(MassToleranceType.DA, SPACINGPERCENTAGEERROR * theoSpacing1));
                         }
 
                     }
@@ -680,6 +656,7 @@ namespace Coon.NeuQuant
             for (int i = 0; i < sequenceOriginal.Length; i++)
             {
                 if (sequenceOriginal[i].Equals('l')) sequenceFixed += 'L';
+                else if (sequenceOriginal[i].Equals('k')) sequenceFixed += 'K';
                 else sequenceFixed += sequenceOriginal[i];
             }
             
@@ -724,10 +701,6 @@ namespace Coon.NeuQuant
                         phosphorylationPositions.Add(i);
                     }
                 }
-                else if (sequence[i].Equals('k'))
-                {
-                    sequenceNoMods += 'K';
-                }
                 else
                 {
                     sequenceNoMods += sequence[i];
@@ -754,7 +727,7 @@ namespace Coon.NeuQuant
             // Set number of labels and search range for PPM correction
             if (Form1.NEUCODE)
             {
-                if (Form1.NEUCODE_DUPLEX_CARBAMYL || Form1.NEUCODE_4PLEX_LIGHT || Form1.NEUCODE_4PLEX_MEDIUM || Form1.NEUCODE_4PLEX_HEAVY || Form1.NEUCODE_12PLEX || Form1.NEUCODE_SIXPLEX_MTRAQ || Form1.NEUCODE_9PLEX_MTRAQ || Form1.NEUCODE_12PLEX_MTRAQ || Form1.NEUCODE_18PLEX_MTRAQ)
+                if (Form1.NEUCODE_DUPLEX_CARBAMYL || Form1.NEUCODE_4PLEX_LIGHT || Form1.NEUCODE_4PLEX_MEDIUM || Form1.NEUCODE_4PLEX_HEAVY || Form1.NEUCODE_12PLEX)
                 {
                     numLabels = countResidues('K', peptide.Sequence) + 1 + tyrosineNHSPositions.Count;
                     firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 50.0);
@@ -777,10 +750,15 @@ namespace Coon.NeuQuant
                     numLabels = countResidues('L', peptide.Sequence);
                     firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 50.0);
                 }
+                else if (Form1.ICAT)
+                {
+                    numLabels = countResidues('C', peptide.Sequence);
+                    firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 50.0);
+                }
                 else
                 {
                     numLabels = countResidues('K', peptide.Sequence);
-                    firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 100.0);
+                    firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 50.0);
                 }
             }
 
@@ -1380,6 +1358,17 @@ namespace Coon.NeuQuant
                     theoMasses[0, 0] = check1.Mass.Monoisotopic;
                     theoMasses[1, 0] = check2.Mass.Monoisotopic;
                 }
+                else if (Form1.ICAT)
+                {
+                    check1 = new Peptide(peptide);
+                    check2 = new Peptide(peptide);
+
+                    check1.SetModification(NamedChemicalFormula.GetModification("iCAT L"), ModificationSites.C);
+                    check2.SetModification(NamedChemicalFormula.GetModification("iCAT H"), ModificationSites.C);
+
+                    theoMasses[0, 0] = check1.Mass.Monoisotopic;
+                    theoMasses[1, 0] = check2.Mass.Monoisotopic;
+                }
             }
         }
 
@@ -1467,15 +1456,15 @@ namespace Coon.NeuQuant
                 // Verify that the largest peak meets the signal-to-noise and charge state criteria
                 if (largest != null)
                 {
-                    int peakCharge = 0;
-                    // Ignore any peak with a known charge state that is incorrect
-                    if (largest.Charge != charge)
-                    {
-                        MSDataScan previous = rawFile[currentScan.SpectrumNumber - 1];
-                        peakCharge = findLowerResolutionCharge(largest, previous);
-                    }
+                    //int peakCharge = 0;
+                    //// Ignore any peak with a known charge state that is incorrect
+                    //if (largest.Charge != charge)
+                    //{
+                    //    MSDataScan previous = rawFile[currentScan.SpectrumNumber - 1];
+                    //    peakCharge = findLowerResolutionCharge(largest, previous);
+                    //}
                     
-                    if (peakCharge > 0 && peakCharge != charge) 
+                    if (largest.Charge > 0 && largest.Charge != charge) 
                     {
                         largest = null;
                     }
@@ -1604,7 +1593,10 @@ namespace Coon.NeuQuant
                 rTRange.Maximum = lastRunTime; //Maximum time surpassed
             }
 
-            // For NeuCode, use high resolution MS1 scans (> 200,000)
+            int firstScanNumber = rawFile.GetSpectrumNumber(rTRange.Minimum);
+            int lastScanNumber = rawFile.GetSpectrumNumber(rTRange.Maximum);
+
+            // For NeuCode, use high resolution MS1 scans
             if (Form1.MULTIINJECT)
             {
                 foreach (PeptideSpectralMatch psm in sortedPSMs)
@@ -1624,9 +1616,16 @@ namespace Coon.NeuQuant
                     }
                 }
             }
-            else if (Form1.NEUCODE || Form1.SILAC_DUPLEX_LEUCN || Form1.SILAC_DUPLEX_LEUH)
+            else if (Form1.AGCBINNING)
             {
-                foreach (MSDataScan scan in rawFile.Where(scan => scan.MsnOrder == 1 && scan.Resolution > 200000 && scan.RetentionTime <= rTRange.Maximum && scan.RetentionTime >= rTRange.Minimum))
+                foreach (MSDataScan scan in rawFile.Where(scan => scan.MsnOrder == 2 && ((MsnDataScan)scan).DissociationType == DissociationType.HCD && scan.RetentionTime <= rTRange.Maximum && scan.RetentionTime >= rTRange.Minimum))
+                {
+                    fullScanList.Add(scan);
+                }
+            }
+            else if (Form1.NEUCODE || Form1.SILAC_DUPLEX_LEUCN || Form1.SILAC_DUPLEX_LEUH || Form1.SILAC_DUPLEX_LYSCN || Form1.SILAC_DUPLEX_LYSH)
+            {
+                foreach (MSDataScan scan in rawFile.Where(scan => scan.MsnOrder == 1 && scan.Resolution >= 100000 && scan.RetentionTime <= rTRange.Maximum && scan.RetentionTime >= rTRange.Minimum))
                 {
                     fullScanList.Add(scan);
                 }
@@ -1650,73 +1649,72 @@ namespace Coon.NeuQuant
             ILabeledPeak[,] peaksFound = new ILabeledPeak[numChannels, numIsotopes];
             Pair pair;
             double injectionTime = rawFile.GetInjectionTime(current.SpectrumNumber);
-
-            // Count the number of non-null peaks returned
             int peaksCount = 0;
-            int peaksPerIsotope = 0;
+            int isotopeCount = 0;
+            int clusterCount = 0;
 
-            //if (Form1.NEUCODE_ARG_PROLINECONVERSION)
-            //{
-            //    double prolineConversion = 5.016775;
-            //    ILabeledPeak prolinePeak;
-            //    for (int j = 0; j < numIsotopes; j++)
-            //    {
-            //        peaksFound[0, j] = largestPeak(adjustedTheoMasses[0, j], current, tolerance, rawFile);
-            //        if (peaksFound[0, j] != null)
-            //        {
-            //            peaksCount++;
-            //            // Look for proline conversion
-            //            if (prolineCount > 0)
-            //            {
-            //                for (int p = 1; p <= prolineCount; p++)
-            //                {
-            //                    prolinePeak = largestPeak(adjustedTheoMasses[0, j] + (p * prolineConversion), current, tolerance, rawFile);
-            //                    if (prolinePeak != null)
-            //                    {
-            //                        if (peaksFound[1, j] == null)
-            //                        {
-            //                            peaksFound[1, j] = prolinePeak;
-            //                        }
-            //                        else
-            //                        {
-            //                            ThermoLabeledPeak duplicatePeak = (ThermoLabeledPeak)peaksFound[1, j];
-            //                            ThermoLabeledPeak addIntensities = new ThermoLabeledPeak(duplicatePeak.MZ, duplicatePeak.Intensity + prolinePeak.Y, duplicatePeak.Charge, duplicatePeak.Noise);
-            //                        }
-            //                    }
-            //                }
-            //            }
-            //            // Look for "fake" proline conversion in peptides that do not contain proline
-            //            else
-            //            {
-            //                int fakeProlines = 2;
-            //                for (int p = 1; p <= fakeProlines; p++)
-            //                {
-            //                    prolinePeak = largestPeak(adjustedTheoMasses[0, j] + (p * prolineConversion), current, tolerance, rawFile);
-            //                    if (prolinePeak != null)
-            //                    {
-            //                        if (peaksFound[1, j] == null)
-            //                        {
-            //                            peaksFound[1, j] = prolinePeak;
-            //                        }
-            //                        else
-            //                        {
-            //                            ThermoLabeledPeak duplicatePeak = (ThermoLabeledPeak)peaksFound[1, j];
-            //                            ThermoLabeledPeak addIntensities = new ThermoLabeledPeak(duplicatePeak.MZ, duplicatePeak.Intensity + prolinePeak.Y, duplicatePeak.Charge, duplicatePeak.Noise);
-            //                        }
-            //                    }
-            //                }
-            //            }
-            //        }
-            //    }
+            /*if (Form1.NEUCODE_ARG_PROLINECONVERSION)
+            {
+                double prolineConversion = 5.016775;
+                ILabeledPeak prolinePeak;
+                for (int j = 0; j < numIsotopes; j++)
+                {
+                    peaksFound[0, j] = largestPeak(adjustedTheoMasses[0, j], current, tolerance, rawFile);
+                    if (peaksFound[0, j] != null)
+                    {
+                        peaksCount++;
+                        // Look for proline conversion
+                        if (prolineCount > 0)
+                        {
+                            for (int p = 1; p <= prolineCount; p++)
+                            {
+                                prolinePeak = largestPeak(adjustedTheoMasses[0, j] + (p * prolineConversion), current, tolerance, rawFile);
+                                if (prolinePeak != null)
+                                {
+                                    if (peaksFound[1, j] == null)
+                                    {
+                                        peaksFound[1, j] = prolinePeak;
+                                    }
+                                    else
+                                    {
+                                        ThermoLabeledPeak duplicatePeak = (ThermoLabeledPeak)peaksFound[1, j];
+                                        ThermoLabeledPeak addIntensities = new ThermoLabeledPeak(duplicatePeak.MZ, duplicatePeak.Intensity + prolinePeak.Y, duplicatePeak.Charge, duplicatePeak.Noise);
+                                    }
+                                }
+                            }
+                        }
+                        // Look for "fake" proline conversion in peptides that do not contain proline
+                        else
+                        {
+                            int fakeProlines = 2;
+                            for (int p = 1; p <= fakeProlines; p++)
+                            {
+                                prolinePeak = largestPeak(adjustedTheoMasses[0, j] + (p * prolineConversion), current, tolerance, rawFile);
+                                if (prolinePeak != null)
+                                {
+                                    if (peaksFound[1, j] == null)
+                                    {
+                                        peaksFound[1, j] = prolinePeak;
+                                    }
+                                    else
+                                    {
+                                        ThermoLabeledPeak duplicatePeak = (ThermoLabeledPeak)peaksFound[1, j];
+                                        ThermoLabeledPeak addIntensities = new ThermoLabeledPeak(duplicatePeak.MZ, duplicatePeak.Intensity + prolinePeak.Y, duplicatePeak.Charge, duplicatePeak.Noise);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
 
-            //    // Create a new pair associated with the MS1 scan and peptide
-            //    pair = new Pair(this, rawFile, current.SpectrumNumber);
-            //    pair.peaks = peaksFound;
-            //    if (peaksCount >= peaksNeeded)
-            //    {
-            //        allPairs[rawFile].Add(pair);
-            //    }
-            //}
+                // Create a new pair associated with the MS1 scan and peptide
+                pair = new Pair(this, rawFile, current.SpectrumNumber);
+                pair.peaks = peaksFound;
+                if (peaksCount >= peaksNeeded)
+                {
+                    allPairs[rawFile].Add(pair);
+                }
+            }*/
             if (Form1.NEUCODE)
             {
                 List<ILabeledPeak> nonNullPeaks;
@@ -1724,181 +1722,244 @@ namespace Coon.NeuQuant
                 int duplicatePeakCount;
                 int channelIndex;
                 ILabeledPeak peak;
-                int clusterCount = 0; // # of clusters meeting the peak count criteria 
-                double patternRange = 0.005;
+                //double patternRange = 0.005;
 
+                clusterCount = 0;
                 for (int c = 0; c < numClusters; c++) // Start cluster loop
                 {
-                    for (int j = 0; j < numIsotopes; j++) // Start isotope loop
+                    if (GetTheoreticalResolvability(c))
                     {
-                        missingChannelCount = 0;
-                        duplicatePeakCount = 0;
-                        nonNullPeaks = new List<ILabeledPeak>();
-                        channelIndex = c * numIsotopologues;
-
-                        for (int i = channelIndex; i < channelIndex + numIsotopologues; i++) // Start isotopologue loop
+                        isotopeCount = 0;
+                        for (int j = 0; j < numIsotopes; j++) // Start isotope loop
                         {
-                            peak = largestPeak(adjustedTheoMasses[i, j], current, tolerance, rawFile);
-                            if (peak != null)
-                            {
-                                if (nonNullPeaks.Contains(peak))
-                                {
-                                    duplicatePeakCount++;
-                                }
-                                else
-                                {
-                                    nonNullPeaks.Add(peak);
-                                    peaksFound[i, j] = peak;
-                                }
-                            }
-                            else
-                            {
-                                missingChannelCount++;
-                            }
-                        }
+                            peaksCount = 0;
+                            missingChannelCount = 0;
+                            duplicatePeakCount = 0;
+                            nonNullPeaks = new List<ILabeledPeak>();
+                            channelIndex = c * numIsotopologues;
 
-                        // Search for patterns if missing or duplicate peaks detected
-                        if (duplicatePeakCount > 0 || missingChannelCount > 0)
-                        {
-                            double min = Mass.MzFromMass(adjustedTheoMasses[channelIndex, j], charge) - patternRange;
-                            double max = Mass.MzFromMass(adjustedTheoMasses[channelIndex + (numIsotopologues - 1), j], charge) + patternRange;
-                            List<MZPeak> peaksReTry = null;
-                            List<ILabeledPeak> convertedPeaks = null;
-                            List<ILabeledPeak> topSignalToNoisePeaks = null;
-                            List<ILabeledPeak> orderedByMzPeaks = null;
-                            if (current.MassSpectrum.TryGetPeaks(min, max, out peaksReTry))
+                            //for (int i = channelIndex; i < channelIndex + numIsotopologues; i++) // Start isotopologue loop
+                            //{
+                            //    peak = largestPeak(adjustedTheoMasses[i, j], current, tolerance, rawFile);
+                            //    if (peak != null)
+                            //    {
+                            //        if (nonNullPeaks.Contains(peak))
+                            //        {
+                            //            duplicatePeakCount++;
+                            //        }
+                            //        else
+                            //        {
+                            //            nonNullPeaks.Add(peak);
+                            //            peaksFound[i, j] = peak;
+                            //        }
+                            //    }
+                            //    else
+                            //    {
+                            //        missingChannelCount++;
+                            //    }
+                            //}
+
+                            // Search for patterns if missing or duplicate peaks detected
+                            if (numIsotopologues > 1)
                             {
-                                convertedPeaks = new List<ILabeledPeak>();
-                                foreach (IPeak peakReTry in peaksReTry)
+                                MassTolerance tolerance = new MassTolerance(MassToleranceType.PPM, 20.0);
+
+                                MassRange minRange = new MassRange(adjustedTheoMasses[channelIndex,j], tolerance);
+                                MassRange maxRange = new MassRange(adjustedTheoMasses[channelIndex + (numIsotopologues - 1), j], tolerance);
+
+                                double minMZ = Mass.MzFromMass(minRange.Minimum, charge);
+                                double maxMZ = Mass.MzFromMass(maxRange.Maximum, charge);
+                                //MassRange mZMassRange = new MassRange(minMZ, maxMZ);
+                                
+                                //double min = Mass.MzFromMass(adjustedTheoMasses[channelIndex, j], charge) - patternRange;
+                                //double max = Mass.MzFromMass(adjustedTheoMasses[channelIndex + (numIsotopologues - 1), j], charge) + patternRange;
+                                List<MZPeak> peaksReTry = null;
+                                List<ILabeledPeak> convertedPeaks = null;
+                                List<ILabeledPeak> topSignalToNoisePeaks = null;
+                                List<ILabeledPeak> orderedByMzPeaks = null;
+                                if (current.MassSpectrum.TryGetPeaks(minMZ, maxMZ, out peaksReTry))
                                 {
-                                    ILabeledPeak newPeak = (ILabeledPeak)peakReTry;
-                                    if (newPeak.GetSignalToNoise() < SIGNALTONOISE)
+                                    convertedPeaks = new List<ILabeledPeak>();
+                                    foreach (IPeak peakReTry in peaksReTry)
                                     {
-                                        newPeak = null;
+                                        ILabeledPeak newPeak = (ILabeledPeak)peakReTry;
+                                        if (newPeak.GetSignalToNoise() < SIGNALTONOISE)
+                                        {
+                                            newPeak = null;
+                                        }
+                                        else if (newPeak.Charge != 0 && newPeak.Charge != charge)
+                                        {
+                                            newPeak = null;
+                                        }
+                                        else
+                                        {
+                                            convertedPeaks.Add(newPeak);
+                                        }
                                     }
-                                    else if (newPeak.Charge != 0 && newPeak.Charge != charge)
+                                    topSignalToNoisePeaks = convertedPeaks.OrderByDescending(peakSort => peakSort.GetSignalToNoise()).Take(numIsotopologues).ToList();
+
+                                    // Peaks found for a complete set of isotopologues                             
+                                    if (topSignalToNoisePeaks.Count == numIsotopologues)
                                     {
-                                        newPeak = null;
+                                        orderedByMzPeaks = topSignalToNoisePeaks.OrderBy(peakSort => peakSort.X).ToList();
+                                        for (int i = 0; i < numIsotopologues; i++)
+                                        {
+                                            peaksFound[channelIndex + i, j] = orderedByMzPeaks[i];
+                                        }
+                                    }
+                                    else if (Form1.NOISEBANDCAP)
+                                    {
+                                        // Peaks found for an incomplete set of isotopologues by pattern detection
+                                        if (topSignalToNoisePeaks.Count >= peaksNeeded)
+                                        {
+                                            ILabeledPeak[] mappedPeaks = mapPeaks(topSignalToNoisePeaks, channelIndex, channelIndex + (numIsotopologues - 1), j, charge);
+                                            for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
+                                            {
+                                                peaksFound[m, j] = mappedPeaks[m - channelIndex];
+                                            }
+                                        }
+                                        // Peaks found for an incomplete set of isotopologues by peak detection
+                                        //else if (nonNullPeaks.Count >= peaksNeeded)
+                                        //{
+                                        //    ILabeledPeak[] mappedPeaks = mapPeaks(nonNullPeaks, channelIndex, channelIndex + (numIsotopologues - 1), j, charge);
+                                        //    for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
+                                        //    {
+                                        //        peaksFound[m, j] = mappedPeaks[m - channelIndex];
+                                        //    }
+                                        //}
                                     }
                                     else
                                     {
-                                        convertedPeaks.Add(newPeak);
-                                    }
-                                }
-                                topSignalToNoisePeaks = convertedPeaks.OrderByDescending(peakSort => peakSort.GetSignalToNoise()).Take(numIsotopologues).ToList();
-
-                                // Peaks found for a complete set of isotopologues                             
-                                if (topSignalToNoisePeaks.Count == numIsotopologues)
-                                {
-                                    orderedByMzPeaks = topSignalToNoisePeaks.OrderBy(peakSort => peakSort.X).ToList();
-                                    for (int i = 0; i < numIsotopologues; i++)
-                                    {
-                                        peaksFound[channelIndex + i, j] = orderedByMzPeaks[i];
-                                    }
-                                }
-                                else if (Form1.NOISEBANDCAP)
-                                {
-                                    // Peaks found for an incomplete set of isotopologues by pattern detection
-                                    if (topSignalToNoisePeaks.Count >= peaksNeeded)
-                                    {
-                                        ILabeledPeak[] mappedPeaks = mapPeaks(topSignalToNoisePeaks, channelIndex, channelIndex + (numIsotopologues - 1), j, charge);
-                                        for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
+                                        for (int i = 0; i < numIsotopologues; i++)
                                         {
-                                            peaksFound[m, j] = mappedPeaks[m - channelIndex];
-                                        }
-                                    }
-                                    // Peaks found for an incomplete set of isotopologues by peak detection
-                                    else if (nonNullPeaks.Count >= peaksNeeded)
-                                    {
-                                        ILabeledPeak[] mappedPeaks = mapPeaks(nonNullPeaks, channelIndex, channelIndex + (numIsotopologues - 1), j, charge);
-                                        for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
-                                        {
-                                            peaksFound[m, j] = mappedPeaks[m - channelIndex];
+                                            peaksFound[channelIndex + i, j] = null;
                                         }
                                     }
                                 }
-                                else
-                                {
-                                    for (int i = 0; i < numIsotopologues; i++)
-                                    {
-                                        peaksFound[channelIndex + i, j] = null;
-                                    }
-                                }
-                            }
-                        } // End pattern detection
+                            } // End pattern detection
 
-                        // Count detected peaks
-                        peaksCount = 0;
-                        for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
-                        {
-                            if (peaksFound[i, j] != null)
+                            // Count detected peaks
+                            for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
                             {
-                                peaksCount++;
+                                if (peaksFound[i, j] != null)
+                                {
+                                    peaksCount++;
+                                }
                             }
-                        }
 
-                        // If enough peaks are detected, increase the cluster count
-                        if (peaksCount >= peaksNeeded)
+                            // If enough peaks are detected, increase the cluster count
+                            if (peaksCount >= peaksNeeded)
+                            {
+                                isotopeCount++;
+                            }
+                            // If not, set all peaks to null
+                            else
+                            {
+                                for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+                                {
+                                    peaksFound[i, j] = null;
+                                }
+                            }
+                        } // End isotope loop
+                        if (isotopeCount > 0)
                         {
                             clusterCount++;
                         }
-                        // If not, set all peaks to null
-                        else
-                        {
-                            for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
-                            {
-                                peaksFound[i, j] = null;
-                            }
-                        }
-                    } // End isotope loop
+                    }
                 } // End cluster loop
 
                 if (clusterCount > 0)
                 {
-                    pair = new Pair(this, rawFile, current.SpectrumNumber);
+                    if (Form1.SEGMENTEDINJECTIONTIMES)
+                    {
+                        bool peakFound = false;
+                        int channelCount = 0;
+                        double mZ = 0;
+                        double timeSum = 0;
+
+                        while (channelCount < numChannels && !peakFound)
+                        {
+                            for (int j = 0; j < numIsotopes; j++)
+                            {
+                                if (peaksFound[channelCount, j] != null)
+                                {
+                                    mZ = peaksFound[channelCount, j].X;
+                                    peakFound = true;
+                                }
+                            }                    
+                            channelCount++;
+                        }
+                        
+                        Dictionary<int, Dictionary<Range<double>, double>> scanNumbers = null;
+                        if (Form1.INJECTIONTIMES.TryGetValue(rawFile.Name, out scanNumbers))
+                        {
+                            Dictionary<Range<double>, double> injectionTimes = null;
+
+                            if (scanNumbers.TryGetValue(current.SpectrumNumber, out injectionTimes))
+                            {
+                                List<double> times = new List<double>();
+                                foreach (KeyValuePair<Range<double>, double> segment in injectionTimes)
+                                {
+                                    if (segment.Key.Contains(mZ))
+                                    {
+                                        times.Add(segment.Value);
+                                        timeSum += segment.Value;
+                                    }
+                                }
+
+                                injectionTime = (timeSum / ((double)times.Count)) / 1000.0;
+                            }
+                        }
+                    }
+                    
+                    pair = new Pair(this, rawFile, current.SpectrumNumber, injectionTime);
                     pair.peaks = peaksFound;
-                    pair.injectionTime = injectionTime;
                     allPairs[rawFile].Add(pair);
                 }   
             }
             else
             {
+                isotopeCount = 0;
                 for (int j = 0; j < numIsotopes; j++)
                 {
-                    peaksPerIsotope = 0;
+                    peaksCount = 0;
                     for (int i = 0; i < numChannels; i++)
                     {
                         peaksFound[i, j] = largestPeak(adjustedTheoMasses[i, j], current, tolerance, rawFile);
                         if (peaksFound[i, j] != null)
                         {
-                            peaksPerIsotope++;
+                            peaksCount++;
                         }
                     }
-                    if (peaksPerIsotope < numChannels && !Form1.NOISEBANDCAP)
+                    if (peaksCount < numChannels && !Form1.NOISEBANDCAP)
                     {
                         for (int k = 0; k < numChannels; k++)
                         {
                             peaksFound[k, j] = null;
                         }
                     }
-                }
-
-                for (int i = 0; i < numChannels; i++)
-                {
-                    for (int j = 0; j < numIsotopes; j++)
+                    else
                     {
-                        if (peaksFound[i, j] != null)
-                        {
-                            peaksCount++;
-                        }
+                        isotopeCount++;
                     }
                 }
 
-                if (peaksCount >= peaksNeeded)
+                //peaksCount = 0;
+                //for (int i = 0; i < numChannels; i++)
+                //{
+                //    for (int j = 0; j < numIsotopes; j++)
+                //    {
+                //        if (peaksFound[i, j] != null)
+                //        {
+                //            peaksCount++;
+                //        }
+                //    }
+                //}
+
+                if (isotopeCount > 0)
                 {
-                    pair = new Pair(this, rawFile, current.SpectrumNumber);
+                    pair = new Pair(this, rawFile, current.SpectrumNumber, injectionTime);
                     pair.peaks = peaksFound;
-                    pair.injectionTime = injectionTime;
                     allPairs[rawFile].Add(pair);
                 }
             }
@@ -1915,23 +1976,23 @@ namespace Coon.NeuQuant
             orderedByMzPeaks = peaks.OrderBy(peak => peak.X).ToList();
 
             int possibleCombinations = 0;
-            if (peaks.Count == 1)
+            if (orderedByMzPeaks.Count == 1)
             {
                 if (numChannels == 2) possibleCombinations = 2;
                 else if (numChannels == 3) possibleCombinations = 3;
             }
-            else if (peaks.Count == 2)
+            else if (orderedByMzPeaks.Count == 2)
             {
                 if (numChannels == 3) possibleCombinations = 3;
                 else if (numChannels == 4) possibleCombinations = 6;
             }
-            else if (peaks.Count == 3)
+            else if (orderedByMzPeaks.Count == 3)
             {
                 if (numChannels == 4) possibleCombinations = 4;
                 else if (numChannels == 6) possibleCombinations = 20;
             }
-            else if (peaks.Count == 4) possibleCombinations = 14;
-            else if (peaks.Count == 5) possibleCombinations = 6;
+            else if (orderedByMzPeaks.Count == 4) possibleCombinations = 15;
+            else if (orderedByMzPeaks.Count == 5) possibleCombinations = 6;
             KeyValuePair<double, ILabeledPeak>[,] errorCheck = new KeyValuePair<double, ILabeledPeak>[possibleCombinations, numChannels];
             
             // Then calculate all the errors
@@ -1946,9 +2007,9 @@ namespace Coon.NeuQuant
             double overallError;
             double minError;
             int minErrorIndex;
-            for (int i = 0; i < peaks.Count; i++)
+            for (int i = 0; i < orderedByMzPeaks.Count; i++)
             {
-                currentPeak = peaks[i];
+                currentPeak = orderedByMzPeaks[i];
 
                 if (numIsotopologues == 2)
                 {
@@ -1972,13 +2033,15 @@ namespace Coon.NeuQuant
                     error2 = MassTolerance.GetTolerance(neutralMass, adjustedTheoMasses[channelStart + 1, isotope], MassToleranceType.PPM);
                     error3 = MassTolerance.GetTolerance(neutralMass, adjustedTheoMasses[channelStart + 2, isotope], MassToleranceType.PPM);
 
-                    if (peaks.Count == 1)
+                    // 3 possibilities
+                    if (orderedByMzPeaks.Count == 1)
                     {
                         if (error1 < error2 && error1 < error3) mappedPeaks[0] = currentPeak;
                         else if (error2 < error1 && error2 < error3) mappedPeaks[1] = currentPeak;
                         else if (error3 < error1 && error3 < error2) mappedPeaks[2] = currentPeak;
                     }
-                    else if (peaks.Count == 2)
+                    // 3 possibilities
+                    else if (orderedByMzPeaks.Count == 2)
                     {
                         if (i == 0)
                         {
@@ -2002,7 +2065,8 @@ namespace Coon.NeuQuant
                     error3 = MassTolerance.GetTolerance(neutralMass, adjustedTheoMasses[channelStart + 2, isotope], MassToleranceType.PPM);
                     error4 = MassTolerance.GetTolerance(neutralMass, adjustedTheoMasses[channelStart + 3, isotope], MassToleranceType.PPM);
 
-                    if (peaks.Count == 2)
+                    // 6 possibilities
+                    if (orderedByMzPeaks.Count == 2)
                     {
                         if (i == 0)
                         {
@@ -2024,7 +2088,8 @@ namespace Coon.NeuQuant
                         }
                     }
 
-                    if (peaks.Count == 3)
+                    // 4 possibilities
+                    if (orderedByMzPeaks.Count == 3)
                     {
                         if (i == 0)
                         {
@@ -2059,7 +2124,8 @@ namespace Coon.NeuQuant
                     error5 = MassTolerance.GetTolerance(neutralMass, adjustedTheoMasses[channelStart + 4, isotope], MassToleranceType.PPM);
                     error6 = MassTolerance.GetTolerance(neutralMass, adjustedTheoMasses[channelStart + 5, isotope], MassToleranceType.PPM);
 
-                    if (peaks.Count == 3)
+                    // 20 possibilities
+                    if (orderedByMzPeaks.Count == 3)
                     {
                         if (i == 0)
                         {
@@ -2132,7 +2198,8 @@ namespace Coon.NeuQuant
                             errorCheck[19, 5] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error6), currentPeak);
                         }
                     }
-                    else if (peaks.Count == 4)
+                    // 15 possibilities
+                    else if (orderedByMzPeaks.Count == 4)
                     {
                         if (i == 0)
                         {
@@ -2145,11 +2212,12 @@ namespace Coon.NeuQuant
                             errorCheck[6, 0] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error1), currentPeak);
                             errorCheck[7, 0] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error1), currentPeak);
                             errorCheck[8, 0] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error1), currentPeak);
-                            errorCheck[9, 1] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error2), currentPeak);
+                            errorCheck[9, 0] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error1), currentPeak);
                             errorCheck[10, 1] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error2), currentPeak);
                             errorCheck[11, 1] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error2), currentPeak);
                             errorCheck[12, 1] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error2), currentPeak);
-                            errorCheck[13, 2] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error3), currentPeak);
+                            errorCheck[13, 1] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error2), currentPeak);
+                            errorCheck[14, 2] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error3), currentPeak);                            
                         }
                         else if (i == 1)
                         {
@@ -2161,12 +2229,14 @@ namespace Coon.NeuQuant
                             errorCheck[5, 1] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error2), currentPeak);
                             errorCheck[6, 2] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error3), currentPeak);
                             errorCheck[7, 2] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error3), currentPeak);
-                            errorCheck[8, 3] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error4), currentPeak);
-                            errorCheck[9, 2] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error3), currentPeak);
+                            errorCheck[8, 2] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error3), currentPeak);
+                            errorCheck[9, 3] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error3), currentPeak);
                             errorCheck[10, 2] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error3), currentPeak);
                             errorCheck[11, 2] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error3), currentPeak);
                             errorCheck[12, 3] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error4), currentPeak);
                             errorCheck[13, 3] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error4), currentPeak);
+                            errorCheck[14, 4] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error5), currentPeak);
+
                         }
                         else if (i == 2)
                         {
@@ -2184,6 +2254,7 @@ namespace Coon.NeuQuant
                             errorCheck[11, 4] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error5), currentPeak);
                             errorCheck[12, 4] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error5), currentPeak);
                             errorCheck[13, 4] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error5), currentPeak);
+
                         }
                         else if (i == 3)
                         {
@@ -2201,9 +2272,11 @@ namespace Coon.NeuQuant
                             errorCheck[11, 5] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error6), currentPeak);
                             errorCheck[12, 5] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error6), currentPeak);
                             errorCheck[13, 5] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error6), currentPeak);
+
                         }
                     }
-                    else if (peaks.Count == 5)
+                    // 6 possibilities
+                    else if (orderedByMzPeaks.Count == 5)
                     {
                         if (i == 0)
                         {
@@ -2323,7 +2396,7 @@ namespace Coon.NeuQuant
                             {
                                 
                             }
-                            else if (maximumIntensity <= System.Math.Log10(Form1.MAXIMUMDNL))
+                            else if (log10MaxIntensity <= System.Math.Log10(Form1.MAXIMUMDNL))
                             {
                                 
                             }
@@ -2475,7 +2548,7 @@ namespace Coon.NeuQuant
                             {
                                 
                             }
-                            else if (maximumIntensity <= System.Math.Log10(Form1.MAXIMUMDNL))
+                            else if (log10MaxIntensity <= System.Math.Log10(Form1.MAXIMUMDNL))
                             {
                                 
                             }
@@ -2669,6 +2742,7 @@ namespace Coon.NeuQuant
             double peak4NeutralMass;
             double peak5NeutralMass;
             double peak6NeutralMass;
+            int peakCount;
 
             allPairs.TryGetValue(rawFile, out pairs);
             if (numIsotopologues == 1 || numIsotopologues == 2)
@@ -2676,23 +2750,33 @@ namespace Coon.NeuQuant
                 for (int i = 0; i < pairs.Count; i++)
                 {
                     pair = pairs[i];
+
                     for (int j = 0; j < numChannels; j += 2)
                     {
                         for (int k = 0; k < numIsotopes; k++)
                         {
+                            peakCount = 0;
                             peak1 = pair.peaks[j, k];
                             peak2 = pair.peaks[j + 1, k];
 
+                            if (peak1 != null)
+                            {
+                                peakCount++;
+                            }
+
+                            if (peak2 != null)
+                            {
+                                peakCount++;
+                            }
+
                             // Only look at complete pairs
-                            if (peak1 != null && peak2 != null)
+                            if (peakCount == 2)
                             {
                                 peak1NeutralMass = Mass.MassFromMz(peak1.X, charge);
                                 peak2NeutralMass = Mass.MassFromMz(peak2.X, charge);
 
                                 spacing1 = peak2NeutralMass - peak1NeutralMass;
-                                //theoSpacing = (double)lysineCount * lysineVersion;
-                                //Spacing space = new Spacing(theoSpacing, spacing, charge, light.MZ, heavy.MZ);
-                                //spacings.Add(space);
+
                                 //Remove pairs whose spacing is more than 5 mDa away from the calculated spacing
                                 if (spacing1 < spacingMassRange[0].Minimum || spacing1 > spacingMassRange[0].Maximum)
                                 {
@@ -2701,11 +2785,13 @@ namespace Coon.NeuQuant
                                     pair.peaks[j + 1, k] = null;
                                 }
                             }
-                            //else if ((peak1 != null || peak2 != null) && Form1.NOISEBANDCAP)
-                            //{
-                            //    // Do nothing
-                            //}
-                            else
+                            else if (Form1.NOISEBANDCAP && peakCount <= 1)
+                            {
+                                pair.peaks[j, k] = null;
+                                pair.peaks[j + 1, k] = null;
+                            }
+
+                            if (peakCount < peaksNeeded)
                             {
                                 pair.peaks[j, k] = null;
                                 pair.peaks[j + 1, k] = null;
@@ -2719,16 +2805,22 @@ namespace Coon.NeuQuant
                 for (int i = 0; i < pairs.Count; i++)
                 {
                     pair = pairs[i];
+
                     for (int j = 0; j < numChannels; j += 3)
                     {
                         for (int k = 0; k < numIsotopes; k++)
                         {
+                            peakCount = 0;
                             peak1 = pair.peaks[j, k];
                             peak2 = pair.peaks[j + 1, k];
                             peak3 = pair.peaks[j + 2, k];
 
+                            if (peak1 != null) peakCount++;
+                            if (peak2 != null) peakCount++;
+                            if (peak3 != null) peakCount++;
+
                             // Only look at complete pairs
-                            if (peak1 != null && peak2 != null && peak3 != null)
+                            if (peakCount == 3)
                             {
                                 peak1NeutralMass = Mass.MassFromMz(peak1.X, charge);
                                 peak2NeutralMass = Mass.MassFromMz(peak2.X, charge);
@@ -2736,37 +2828,98 @@ namespace Coon.NeuQuant
 
                                 spacing1 = peak2NeutralMass - peak1NeutralMass;
                                 spacing2 = peak3NeutralMass - peak2NeutralMass;
-                                //theoSpacing = (double)lysineCount * lysineVersion;
-                                //Spacing space = new Spacing(theoSpacing, spacing, charge, light.MZ, heavy.MZ);
-                                //spacings.Add(space);
+
                                 //Remove pairs whose spacing is more than 5 mDa away from the calculated spacing
-                                if (spacing1 < spacingMassRange[0].Minimum || spacing1 > spacingMassRange[0].Maximum)
+                                if (Form1.NOISEBANDCAP)
                                 {
-                                    //Console.WriteLine("bad spacing");
-                                    pair.peaks[j, k] = null;
-                                    if (!Form1.NOISEBANDCAP)
+                                    if (!spacingMassRange[0].Contains(spacing1))
+                                    {
+                                        pair.peaks[j, k] = null;
+                                        peakCount--;
+
+                                        if (!spacingMassRange[1].Contains(spacing2))
+                                        {
+                                            pair.peaks[j + 1, k] = null;
+                                            peakCount--;
+                                            pair.peaks[j + 2, k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                    else if (!spacingMassRange[1].Contains(spacing2))
+                                    {
+                                        pair.peaks[j + 2, k] = null;
+                                        peakCount--;
+                                    }
+
+                                    if (peakCount < peaksNeeded)
+                                    {
+                                        pair.peaks[j, k] = null;
+                                        pair.peaks[j + 1, k] = null;
+                                        pair.peaks[j + 2, k] = null;
+                                    }
+                                }
+                                else
+                                {
+                                    if (!spacingMassRange[0].Contains(spacing1) || !spacingMassRange[1].Contains(spacing2))
+                                    {
+                                        pair.peaks[j, k] = null;
+                                        pair.peaks[j + 1, k] = null;
+                                        pair.peaks[j + 2, k] = null;
+                                    }
+                                }
+                            }
+                            else if (Form1.NOISEBANDCAP && peakCount == 2)
+                            {
+                                if (peak1 != null)
+                                {
+                                    peak1NeutralMass = Mass.MassFromMz(peak1.X, charge);
+
+                                    // Peaks 1 & 2
+                                    if (peak2 != null)
+                                    {
+                                        peak2NeutralMass = Mass.MassFromMz(peak2.X, charge);
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                        if (!spacingMassRange[0].Contains(spacing1))
+                                        {
+                                            pair.peaks[j, k] = null;
+                                            pair.peaks[j + 1, k] = null;
+                                        }
+                                    }
+                                    // Peaks 1 & 3
+                                    else if (peak3 != null)
+                                    {
+                                        peak2NeutralMass = Mass.MassFromMz(peak3.X, charge);
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                        double extendedTheoSpacing = spacingMassRange[0].Mean + spacingMassRange[1].Mean;
+                                        MassRange doubleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, SPACINGPERCENTAGEERROR * extendedTheoSpacing));
+                                        if (!doubleSpacing.Contains(spacing1))
+                                        {
+                                            pair.peaks[j, k] = null;
+                                            pair.peaks[j + 2, k] = null;
+                                        }
+                                    }
+                                }
+                                // Peaks 2 & 3
+                                else if (peak2 != null)
+                                {
+                                    peak1NeutralMass = Mass.MassFromMz(peak2.X, charge);
+                                    peak2NeutralMass = Mass.MassFromMz(peak3.X, charge);
+                                    spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                    if (!spacingMassRange[1].Contains(spacing1))
                                     {
                                         pair.peaks[j + 1, k] = null;
                                         pair.peaks[j + 2, k] = null;
                                     }
                                 }
-                                if (spacing2 < spacingMassRange[1].Minimum || spacing2 > spacingMassRange[1].Maximum)
-                                {
-                                    pair.peaks[j + 2, k] = null;
-                                    if (pair.peaks[j, k] == null) pair.peaks[j + 1, k] = null;
-
-                                    if (!Form1.NOISEBANDCAP)
-                                    {
-                                        pair.peaks[j, k] = null;
-                                        pair.peaks[j + 1, k] = null;
-                                    }
-                                }
                             }
-                            //else if ((peak1 != null || peak2 != null) && Form1.NOISEBANDCAP)
-                            //{
-                            //    // Do nothing
-                            //}
-                            else
+                            else if (Form1.NOISEBANDCAP && peakCount < 1)
+                            {
+                                pair.peaks[j, k] = null;
+                                pair.peaks[j + 1, k] = null;
+                                pair.peaks[j + 2, k] = null;
+                            }
+
+                            if (peakCount < peaksNeeded)
                             {
                                 pair.peaks[j, k] = null;
                                 pair.peaks[j + 1, k] = null;
@@ -2785,13 +2938,19 @@ namespace Coon.NeuQuant
                     {
                         for (int k = 0; k < numIsotopes; k++)
                         {
+                            peakCount = 0;
                             peak1 = pair.peaks[j, k];
                             peak2 = pair.peaks[j + 1, k];
                             peak3 = pair.peaks[j + 2, k];
                             peak4 = pair.peaks[j + 3, k];
 
+                            if (peak1 != null) peakCount++;
+                            if (peak2 != null) peakCount++;
+                            if (peak3 != null) peakCount++;
+                            if (peak4 != null) peakCount++;
+
                             // Only look at complete pairs
-                            if (peak1 != null && peak2 != null && peak3 != null)
+                            if (peakCount == 4)
                             {
                                 peak1NeutralMass = Mass.MassFromMz(peak1.X, charge);
                                 peak2NeutralMass = Mass.MassFromMz(peak2.X, charge);
@@ -2801,37 +2960,60 @@ namespace Coon.NeuQuant
                                 spacing1 = peak2NeutralMass - peak1NeutralMass;
                                 spacing2 = peak3NeutralMass - peak2NeutralMass;
                                 spacing3 = peak4NeutralMass - peak3NeutralMass;
-                                //theoSpacing = (double)lysineCount * lysineVersion;
-                                //Spacing space = new Spacing(theoSpacing, spacing, charge, light.MZ, heavy.MZ);
-                                //spacings.Add(space);
+
                                 //Remove pairs whose spacing is more than 5 mDa away from the calculated spacing
-                                if (spacing1 < spacingMassRange[0].Minimum || spacing1 > spacingMassRange[0].Maximum)
+                                if (Form1.NOISEBANDCAP)
                                 {
-                                    //Console.WriteLine("bad spacing");
-                                    pair.peaks[j, k] = null;
-                                    if (!Form1.NOISEBANDCAP)
-                                    {
-                                        pair.peaks[j + 1, k] = null;
-                                        pair.peaks[j + 2, k] = null;
-                                        pair.peaks[j + 3, k] = null;
-                                    }
-                                }
-                                if (spacing3 < spacingMassRange[2].Minimum || spacing3 > spacingMassRange[2].Maximum)
-                                {
-                                    pair.peaks[j + 3, k] = null;
-                                    if (!Form1.NOISEBANDCAP)
+                                    // Spacing 1 is bad
+                                    if (!spacingMassRange[0].Contains(spacing1))
                                     {
                                         pair.peaks[j, k] = null;
-                                        pair.peaks[j + 1, k] = null;
-                                        pair.peaks[j + 2, k] = null;
+                                        peakCount--;
+
+                                        // Spacings 1 & 2 are bad
+                                        if (!spacingMassRange[1].Contains(spacing2))
+                                        {
+                                            pair.peaks[j + 1, k] = null;
+                                            peakCount--;
+                                            
+                                            // Spacings 1, 2 & 3 are bad 
+                                            if (!spacingMassRange[2].Contains(spacing3))
+                                            {
+                                                pair.peaks[j+2,k] = null;
+                                                peakCount--;
+                                                pair.peaks[j+3,k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Spacings 1 & 3 are bad
+                                        else if (!spacingMassRange[2].Contains(spacing3))
+                                        {
+                                            pair.peaks[j + 3, k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                    // Spacing 2 is bad
+                                    else if (!spacingMassRange[1].Contains(spacing2))
+                                    {                                        
+                                        // Spacings 2 & 3 are bad
+                                        if (!spacingMassRange[2].Contains(spacing3))
+                                        {
+                                            pair.peaks[j+2,k] = null;
+                                            peakCount--;
+                                            pair.peaks[j+3,k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                    // Spacing 3 is bad
+                                    else if (!spacingMassRange[2].Contains(spacing3))
+                                    {
+                                        pair.peaks[j+3,k] = null;
+                                        peakCount--;
                                     }
                                 }
-                                if (spacing2 < spacingMassRange[1].Minimum || spacing2 > spacingMassRange[1].Maximum)
+                                else
                                 {
-                                    if (pair.peaks[j, k] == null) pair.peaks[j + 1, k] = null;
-                                    if (pair.peaks[j + 3, k] == null) pair.peaks[j + 2, k] = null;
-
-                                    if (!Form1.NOISEBANDCAP)
+                                    if (!spacingMassRange[0].Contains(spacing1) || !spacingMassRange[1].Contains(spacing2) || !spacingMassRange[2].Contains(spacing3))
                                     {
                                         pair.peaks[j, k] = null;
                                         pair.peaks[j + 1, k] = null;
@@ -2840,11 +3022,250 @@ namespace Coon.NeuQuant
                                     }
                                 }
                             }
-                            //else if ((peak1 != null || peak2 != null) && Form1.NOISEBANDCAP)
-                            //{
-                            //    // Do nothing
-                            //}
-                            else
+                            else if (Form1.NOISEBANDCAP && peakCount == 3)
+                            {
+                                if (peak1 != null)
+                                {
+                                    peak1NeutralMass = Mass.MassFromMz(peak1.X, charge);
+
+                                    if (peak2 != null)
+                                    {
+                                        peak2NeutralMass = Mass.MassFromMz(peak2.X, charge);
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+
+                                        // Peaks 1, 2 & 3
+                                        if (peak3 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak3.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+
+                                            // Spacing 1 is bad
+                                            if (!spacingMassRange[0].Contains(spacing1))
+                                            {
+                                                pair.peaks[j, k] = null;
+                                                peakCount--;
+
+                                                // Spacings 1 & 2 are bad
+                                                if (!spacingMassRange[1].Contains(spacing2))
+                                                {
+                                                    pair.peaks[j + 1, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 2, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacing 2 is bad
+                                            else if (!spacingMassRange[1].Contains(spacing2))
+                                            {
+                                                pair.peaks[j + 2, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Peaks 1, 2 & 4
+                                        else if (peak4 != null)
+                                        {
+                                            peak4NeutralMass = Mass.MassFromMz(peak4.X, charge);
+                                            spacing2 = peak4NeutralMass - peak2NeutralMass;
+                                            double extendedTheoSpacing = spacingMassRange[1].Mean + spacingMassRange[2].Mean;
+                                            MassRange doubleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, SPACINGPERCENTAGEERROR * extendedTheoSpacing));
+
+                                            // Spacing 1 is bad
+                                            if (!spacingMassRange[0].Contains(spacing1))
+                                            {
+                                                pair.peaks[j, k] = null;
+                                                peakCount--;
+
+                                                // Spacings 1 & 2 are bad
+                                                if (!doubleSpacing.Contains(spacing2))
+                                                {
+                                                    pair.peaks[j + 1, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 3, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacing 2 is bad
+                                            else if (!doubleSpacing.Contains(spacing2))
+                                            {
+                                                pair.peaks[j + 3, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                    }
+                                    else if (peak3 != null)
+                                    {
+                                        // Peaks 1, 3 & 4
+                                        peak2NeutralMass = Mass.MassFromMz(peak3.X, charge);
+                                        peak3NeutralMass = Mass.MassFromMz(peak4.X, charge);
+
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                        spacing2 = peak3NeutralMass - peak2NeutralMass;
+
+                                        double extendedTheoSpacing = spacingMassRange[0].Mean + spacingMassRange[1].Mean;
+                                        MassRange doubleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, SPACINGPERCENTAGEERROR * extendedTheoSpacing));
+
+                                        // Spacing 1 is bad
+                                        if (!doubleSpacing.Contains(spacing1))
+                                        {
+                                            pair.peaks[j, k] = null;
+                                            peakCount--;
+
+                                            // Spacings 1 & 2 are bad
+                                            if (!spacingMassRange[2].Contains(spacing2))
+                                            {
+                                                pair.peaks[j + 2, k] = null;
+                                                peakCount--;
+                                                pair.peaks[j + 3, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Spacing 2 is bad
+                                        else if (!spacingMassRange[2].Contains(spacing2))
+                                        {
+                                            pair.peaks[j + 3, k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                }
+                                // Peaks 2, 3 & 4
+                                else if (peak2 != null)
+                                {
+                                    peak1NeutralMass = Mass.MassFromMz(peak2.X, charge);
+                                    peak2NeutralMass = Mass.MassFromMz(peak3.X, charge);
+                                    peak3NeutralMass = Mass.MassFromMz(peak4.X, charge);
+
+                                    spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                    spacing2 = peak3NeutralMass - peak2NeutralMass;
+                                    // Spacing 1 is bad
+                                    if (!spacingMassRange[1].Contains(spacing1))
+                                    {
+                                        pair.peaks[j+1,k] = null;
+                                        peakCount--;
+
+                                        // Spacings 1 & 2 are bad
+                                        if (!spacingMassRange[2].Contains(spacing2))
+                                        {
+                                            pair.peaks[j+2,k] = null;
+                                            peakCount--;
+                                            pair.peaks[j+3,k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                    // Spacing 2 is bad
+                                    else if (!spacingMassRange[2].Contains(spacing2))
+                                    {
+                                        pair.peaks[j + 3, k] = null;
+                                        peakCount--;
+                                    }
+                                }
+                            }
+                            else if (Form1.NOISEBANDCAP && peakCount == 2)
+                            {
+                                if (peak1 != null)
+                                {
+                                    peak1NeutralMass = Mass.MassFromMz(peak1.X, charge);
+
+                                    // Peaks 1 & 2
+                                    if (peak2 != null)
+                                    {
+                                        peak2NeutralMass = Mass.MassFromMz(peak2.X, charge);
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                        if (spacingMassRange[0].Contains(spacing1))
+                                        {
+                                            pair.peaks[j,k] = null;
+                                            peakCount--;
+                                            pair.peaks[j+1,k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                    // Peaks 1 & 3
+                                    else if (peak3 != null)
+                                    {
+                                        peak2NeutralMass = Mass.MassFromMz(peak3.X, charge);
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                        double extendedTheoMass = spacingMassRange[0].Mean + spacingMassRange[1].Mean;
+                                        MassRange doubleSpacing = new MassRange(extendedTheoMass, new MassTolerance(MassToleranceType.DA, SPACINGPERCENTAGEERROR * extendedTheoMass));
+                                        if (!doubleSpacing.Contains(spacing1))
+                                        {
+                                            pair.peaks[j,k] = null;
+                                            peakCount--;
+                                            pair.peaks[j+2,k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                    // Peaks 1 & 4
+                                    else if (peak4 != null)
+                                    {
+                                        peak2NeutralMass = Mass.MassFromMz(peak4.X, charge);
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                        double extendedTheoMass = spacingMassRange[0].Mean + spacingMassRange[2].Mean;
+                                        MassRange doubleSpacing = new MassRange(extendedTheoMass, new MassTolerance(MassToleranceType.DA, SPACINGPERCENTAGEERROR * extendedTheoMass));
+                                        if (!doubleSpacing.Contains(spacing1))
+                                        {
+                                            pair.peaks[j,k] = null;
+                                            peakCount--;
+                                            pair.peaks[j+3,k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                }
+                                else if (peak2 != null)
+                                {
+                                    peak1NeutralMass = Mass.MassFromMz(peak2.X, charge);
+
+                                    // Peaks 2 & 3
+                                    if (peak3 != null)
+                                    {
+                                        peak2NeutralMass = Mass.MassFromMz(peak3.X, charge);
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                        if (!spacingMassRange[1].Contains(spacing1))
+                                        {
+                                            pair.peaks[j+1,k] = null;
+                                            peakCount--;
+                                            pair.peaks[j+2,k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                    // Peaks 2 & 4
+                                    else if (peak4 != null)
+                                    {
+                                        peak2NeutralMass = Mass.MassFromMz(peak4.X, charge);
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                        double extendedTheoSpacing = spacingMassRange[1].Mean + spacingMassRange[2].Mean;
+                                        MassRange doubleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, SPACINGPERCENTAGEERROR * extendedTheoSpacing));
+                                        if (!doubleSpacing.Contains(spacing1))
+                                        {
+                                            pair.peaks[j+1,k] = null;
+                                            peakCount--;
+                                            pair.peaks[j+3,k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                }
+                                // Peaks 3 & 4
+                                else if (peak3 != null)
+                                {
+                                    peak1NeutralMass = Mass.MassFromMz(peak3.X, charge);
+                                    peak2NeutralMass = Mass.MassFromMz(peak4.X, charge);
+                                    spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                    if (!spacingMassRange[2].Contains(spacing1))
+                                    {
+                                        pair.peaks[j+2,k] = null;
+                                        peakCount--;
+                                        pair.peaks[j+3,k] = null;
+                                        peakCount--;
+                                    }
+                                }
+                            }
+                            else if (Form1.NOISEBANDCAP && peakCount < 2)
+                            {
+                                pair.peaks[j, k] = null;
+                                pair.peaks[j + 1, k] = null;
+                                pair.peaks[j + 2, k] = null;
+                                pair.peaks[j + 3, k] = null;
+                            }
+
+                            if (peakCount < peaksNeeded)
                             {
                                 pair.peaks[j, k] = null;
                                 pair.peaks[j + 1, k] = null;
@@ -2864,6 +3285,7 @@ namespace Coon.NeuQuant
                     {
                         for (int k = 0; k < numIsotopes; k++)
                         {
+                            peakCount = 0;
                             peak1 = pair.peaks[j, k];
                             peak2 = pair.peaks[j + 1, k];
                             peak3 = pair.peaks[j + 2, k];
@@ -2871,8 +3293,15 @@ namespace Coon.NeuQuant
                             peak5 = pair.peaks[j + 4, k];
                             peak6 = pair.peaks[j + 5, k];
 
+                            if (peak1 != null) peakCount++;
+                            if (peak2 != null) peakCount++;
+                            if (peak3 != null) peakCount++;
+                            if (peak4 != null) peakCount++;
+                            if (peak5 != null) peakCount++;
+                            if (peak6 != null) peakCount++;
+
                             // Only look at complete pairs
-                            if (peak1 != null && peak2 != null && peak3 != null && peak4 != null && peak5 != null && peak6 != null)
+                            if (peakCount == 6)
                             {
                                 peak1NeutralMass = Mass.MassFromMz(peak1.X, charge);
                                 peak2NeutralMass = Mass.MassFromMz(peak2.X, charge);
@@ -2886,68 +3315,202 @@ namespace Coon.NeuQuant
                                 spacing3 = peak4NeutralMass - peak3NeutralMass;
                                 spacing4 = peak5NeutralMass - peak4NeutralMass;
                                 spacing5 = peak6NeutralMass - peak5NeutralMass;
-                                //theoSpacing = (double)lysineCount * lysineVersion;
-                                //Spacing space = new Spacing(theoSpacing, spacing, charge, light.MZ, heavy.MZ);
-                                //spacings.Add(space);
+
                                 //Remove pairs whose spacing is more than 5 mDa away from the calculated spacing
-                                if (spacing1 < spacingMassRange[0].Minimum || spacing1 > spacingMassRange[0].Maximum)
+                                if (Form1.NOISEBANDCAP)
                                 {
-                                    //Console.WriteLine("bad spacing");
-                                    pair.peaks[j, k] = null;
-                                    if (!Form1.NOISEBANDCAP)
+                                    // Spacing 1 is bad
+                                    if (!spacingMassRange[0].Contains(spacing1))
                                     {
-                                        pair.peaks[j + 1, k] = null;
-                                        pair.peaks[j + 2, k] = null;
-                                        pair.peaks[j + 3, k] = null;
-                                        pair.peaks[j + 4, k] = null;
+                                        pair.peaks[j, k] = null;
+                                        peakCount--;
+
+                                        // Spacings 1 & 2 are bad
+                                        if (!spacingMassRange[1].Contains(spacing2))
+                                        {
+                                            pair.peaks[j + 1, k] = null;
+                                            peakCount--;
+
+                                            // Spacings 1,2 & 3 are bad
+                                            if (!spacingMassRange[2].Contains(spacing3))
+                                            {
+                                                pair.peaks[j + 2, k] = null;
+                                                peakCount--;
+
+                                                // Spacings 1,2,3 & 4 are bad
+                                                if (!spacingMassRange[3].Contains(spacing4))
+                                                {
+                                                    pair.peaks[j + 3, k] = null;
+                                                    peakCount--;
+
+                                                    // Spacings 1,2,3,4 & 5 are bad
+                                                    if (!spacingMassRange[4].Contains(spacing5))
+                                                    {
+                                                        pair.peaks[j + 4, k] = null;
+                                                        peakCount--;
+                                                        pair.peaks[j + 5, k] = null;
+                                                        peakCount--;
+                                                    }
+                                                }
+                                                // Spacings 1,2,3 & 5 are bad
+                                                else if (!spacingMassRange[4].Contains(spacing5))
+                                                {
+                                                    pair.peaks[j + 5, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacings 1,2 & 4 are bad
+                                            else if (!spacingMassRange[3].Contains(spacing4))
+                                            {
+                                                // Spacings 1,2,4 & 5 are bad
+                                                if (!spacingMassRange[4].Contains(spacing5))
+                                                {
+                                                    pair.peaks[j + 4, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 5, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                        }
+                                        // Spacings 1 & 3 are bad
+                                        else if (!spacingMassRange[2].Contains(spacing3))
+                                        {
+                                            // Spacings 1,3 & 4 are bad
+                                            if (!spacingMassRange[3].Contains(spacing4))
+                                            {
+                                                pair.peaks[j + 3, k] = null;
+                                                peakCount--;
+
+                                                // Spacings 1,3,4 & 5 are bad
+                                                if (!spacingMassRange[4].Contains(spacing5))
+                                                {
+                                                    pair.peaks[j + 4, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 5, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacings 1,3 & 5 are bad
+                                            else if (!spacingMassRange[4].Contains(spacing5))
+                                            {
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Spacings 1 & 4 are bad
+                                        else if (!spacingMassRange[3].Contains(spacing4))
+                                        {
+                                            // Spacings 1,4 & 5 are bad
+                                            if (!spacingMassRange[4].Contains(spacing5))
+                                            {
+                                                pair.peaks[j + 4, k] = null;
+                                                peakCount--;
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Spacings 1 & 5 are bad
+                                        else if (!spacingMassRange[4].Contains(spacing5))
+                                        {
+                                            pair.peaks[j + 5, k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                    // Spacing 2 is bad
+                                    else if (!spacingMassRange[1].Contains(spacing2))
+                                    {
+                                        // Spacings 2 & 3 are bad
+                                        if (!spacingMassRange[2].Contains(spacing3))
+                                        {
+                                            pair.peaks[j + 2, k] = null;
+                                            peakCount--;
+                                            // Spacings 2,3 & 4 are bad
+                                            if (!spacingMassRange[3].Contains(spacing4))
+                                            {
+                                                pair.peaks[j + 3, k] = null;
+                                                peakCount--;
+                                                // Spacings 2,3,4 & 5 are bad
+                                                if (!spacingMassRange[4].Contains(spacing5))
+                                                {
+                                                    pair.peaks[j + 4, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 5, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacings 2,3 & 5 are bad
+                                            else if (!spacingMassRange[4].Contains(spacing5))
+                                            {
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Spacings 2 & 4 are bad
+                                        else if (!spacingMassRange[3].Contains(spacing4))
+                                        {
+                                            // Spacings 2,4 & 5 are bad
+                                            if (!spacingMassRange[4].Contains(spacing5))
+                                            {
+                                                pair.peaks[j + 4, k] = null;
+                                                peakCount--;
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Spacings 2 & 5 are bad
+                                        else if (!spacingMassRange[4].Contains(spacing5))
+                                        {
+                                            pair.peaks[j + 5, k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                    // Spacing 3 is bad
+                                    else if (!spacingMassRange[2].Contains(spacing3))
+                                    {
+                                        // Spacings 3 & 4 are bad
+                                        if (!spacingMassRange[3].Contains(spacing4))
+                                        {
+                                            pair.peaks[j + 3, k] = null;
+                                            peakCount--;
+                                            // Spacings 3,4 & 5 are bad
+                                            if (!spacingMassRange[4].Contains(spacing5))
+                                            {
+                                                pair.peaks[j + 4, k] = null;
+                                                peakCount--;
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Spacings 3 & 5 are bad
+                                        else if (!spacingMassRange[4].Contains(spacing5))
+                                        {
+                                            pair.peaks[j + 5, k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                    // Spacing 4 is bad
+                                    else if (!spacingMassRange[3].Contains(spacing4))
+                                    {
+                                        // Spacings 4 & 5 are bad
+                                        if (!spacingMassRange[4].Contains(spacing5))
+                                        {
+                                            pair.peaks[j + 4, k] = null;
+                                            peakCount--;
+                                            pair.peaks[j + 5, k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                    // Spacing 5 is bad
+                                    else if (!spacingMassRange[4].Contains(spacing5))
+                                    {
                                         pair.peaks[j + 5, k] = null;
+                                        peakCount--;
                                     }
                                 }
-                                if (spacing5 < spacingMassRange[4].Minimum || spacing5 > spacingMassRange[4].Maximum)
+                                else
                                 {
-                                    pair.peaks[j + 5, k] = null;
-                                    if (!Form1.NOISEBANDCAP)
+                                    if (!spacingMassRange[0].Contains(spacing1) || !spacingMassRange[1].Contains(spacing2) || !spacingMassRange[2].Contains(spacing3) || !spacingMassRange[3].Contains(spacing4) || !spacingMassRange[4].Contains(spacing5))
                                     {
-                                        pair.peaks[j, k] = null;
-                                        pair.peaks[j + 1, k] = null;
-                                        pair.peaks[j + 2, k] = null;
-                                        pair.peaks[j + 3, k] = null;
-                                        pair.peaks[j + 4, k] = null;
-                                    }
-                                }
-                                if (spacing2 < spacingMassRange[1].Minimum || spacing2 > spacingMassRange[1].Maximum)
-                                {
-                                    if (pair.peaks[j, k] == null) pair.peaks[j + 1, k] = null;
-                                    if (!Form1.NOISEBANDCAP)
-                                    {
-                                        pair.peaks[j, k] = null;
-                                        pair.peaks[j + 1, k] = null;
-                                        pair.peaks[j + 2, k] = null;
-                                        pair.peaks[j + 3, k] = null;
-                                        pair.peaks[j + 4, k] = null;
-                                        pair.peaks[j + 5, k] = null;
-                                    }
-                                }
-                                if (spacing4 < spacingMassRange[3].Minimum || spacing4 > spacingMassRange[3].Maximum)
-                                {
-                                    if (pair.peaks[j + 5, k] == null) pair.peaks[j + 4, k] = null;
-                                    if (!Form1.NOISEBANDCAP)
-                                    {
-                                        pair.peaks[j, k] = null;
-                                        pair.peaks[j + 1, k] = null;
-                                        pair.peaks[j + 2, k] = null;
-                                        pair.peaks[j + 3, k] = null;
-                                        pair.peaks[j + 4, k] = null;
-                                        pair.peaks[j + 5, k] = null;
-                                    }
-                                }
-                                if (spacing3 < spacingMassRange[2].Minimum || spacing3 > spacingMassRange[2].Maximum)
-                                {
-                                    if (pair.peaks[j + 1, k] == null) pair.peaks[j + 2, k] = null;
-                                    if (pair.peaks[j + 4, k] == null) pair.peaks[j + 3, k] = null;
-                                    if (!Form1.NOISEBANDCAP)
-                                    {
-                                        pair.peaks[j, k] = null;
                                         pair.peaks[j + 1, k] = null;
                                         pair.peaks[j + 2, k] = null;
                                         pair.peaks[j + 3, k] = null;
@@ -2956,11 +3519,1732 @@ namespace Coon.NeuQuant
                                     }
                                 }
                             }
-                            //else if ((peak1 != null || peak2 != null) && Form1.NOISEBANDCAP)
-                            //{
-                            //    // Do nothing
-                            //}
-                            else
+                            else if (Form1.NOISEBANDCAP && peakCount == 5)
+                            {
+                                if (peak1 != null)
+                                {
+                                    peak1NeutralMass = Mass.MassFromMz(peak1.X, charge);
+
+                                    if (peak2 != null)
+                                    {
+                                        peak2NeutralMass = Mass.MassFromMz(peak2.X, charge);
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+
+                                        if (peak3 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak3.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+
+                                            if (peak4 != null)
+                                            {
+                                                peak4NeutralMass = Mass.MassFromMz(peak4.X, charge);
+                                                spacing3 = peak4NeutralMass - peak3NeutralMass;
+
+                                                // Peaks 1,2,3,4 & 5
+                                                if (peak5 != null)
+                                                {
+                                                    peak5NeutralMass = Mass.MassFromMz(peak5.X, charge);
+                                                    spacing4 = peak5NeutralMass - peak4NeutralMass;
+                                                }
+                                                // Peaks 1,2,3,4 & 6
+                                                else if (peak6 != null)
+                                                {
+                                                    peak5NeutralMass = Mass.MassFromMz(peak6.X, charge);
+                                                    spacing4 = peak5NeutralMass - peak4NeutralMass;
+                                                    double extendedTheoSpacing = spacingMassRange[3].Mean + spacingMassRange[4].Mean;
+                                                    MassRange doubleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, SPACINGPERCENTAGEERROR * extendedTheoSpacing));
+                                                }
+                                            }
+                                        }
+                                        // Peaks 1,2,4,5 & 6
+                                        else if (peak4 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak4.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+                                            double extendedTheoSpacing = spacingMassRange[1].Mean + spacingMassRange[2].Mean;
+                                            MassRange doubleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, SPACINGPERCENTAGEERROR * extendedTheoSpacing));
+                                        }
+                                    }
+                                    // Peaks 1,3,4,5 & 6
+                                    else if (peak3 != null)
+                                    {
+                                        peak2NeutralMass = Mass.MassFromMz(peak3.X, charge);
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                        double extendedTheoSpacing = spacingMassRange[0].Mean + spacingMassRange[1].Mean;
+                                        MassRange doubleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, SPACINGPERCENTAGEERROR * extendedTheoSpacing));
+                                    }
+                                }
+                                // Peaks 2,3,4,5 & 6
+                                else if (peak2 != null)
+                                {
+                                    peak1NeutralMass = Mass.MassFromMz(peak2.X, charge);
+                                    peak2NeutralMass = Mass.MassFromMz(peak3.X, charge);
+                                    peak3NeutralMass = Mass.MassFromMz(peak4.X, charge);
+                                    peak4NeutralMass = Mass.MassFromMz(peak5.X, charge);
+                                    peak5NeutralMass = Mass.MassFromMz(peak6.X, charge);
+
+                                    spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                    spacing2 = peak3NeutralMass - peak2NeutralMass;
+                                    spacing3 = peak4NeutralMass - peak3NeutralMass;
+                                    spacing4 = peak5NeutralMass - peak4NeutralMass;
+
+                                    // Spacing 1 is bad
+                                    if (!spacingMassRange[1].Contains(spacing1))
+                                    {
+                                        pair.peaks[j + 1, k] = null;
+                                        peakCount--;
+
+                                        // Spacings 1 & 2 are bad
+                                        if (!spacingMassRange[2].Contains(spacing2))
+                                        {
+                                            pair.peaks[j + 2, k] = null;
+                                            peakCount--;
+
+                                            // Spacings 1,2 & 3 are bad
+                                            if (!spacingMassRange[3].Contains(spacing3))
+                                            {
+                                                pair.peaks[j + 3, k] = null;
+                                                peakCount--;
+
+                                                // Spacings 1,2,3 & 4 are bad
+                                                if (!spacingMassRange[4].Contains(spacing4))
+                                                {
+                                                    pair.peaks[j + 4, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 5, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacings 1,2 & 4 are bad
+                                            else if (!spacingMassRange[4].Contains(spacing4))
+                                            {
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Spacings 1 & 3 are bad
+                                        else if (!spacingMassRange[3].Contains(spacing3))
+                                        {
+                                            // Spacings 1,3 & 4 are bad
+                                            if (!spacingMassRange[4].Contains(spacing4))
+                                            {
+                                                pair.peaks[j + 4, k] = null;
+                                                peakCount--;
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+
+                                        // Spacings 1 & 4 are bad
+                                        else if (!spacingMassRange[4].Contains(spacing4))
+                                        {
+                                            pair.peaks[j + 5, k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                    // Spacing 2 is bad
+                                    else if (!spacingMassRange[2].Contains(spacing2))
+                                    {
+                                        // Spacings 2 & 3 are bad
+                                        if (!spacingMassRange[3].Contains(spacing3))
+                                        {
+                                            pair.peaks[j + 3, k] = null;
+                                            peakCount--;
+                                            // Spacings 2,3 & 4 are bad
+                                            if (!spacingMassRange[4].Contains(spacing4))
+                                            {
+                                                pair.peaks[j + 4, k] = null;
+                                                peakCount--;
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Spacings 2 & 4 are bad
+                                        else if (!spacingMassRange[4].Contains(spacing4))
+                                        {
+                                            pair.peaks[j + 5, k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                    // Spacing 3 is bad
+                                    else if (!spacingMassRange[3].Contains(spacing3))
+                                    {
+                                        // Spacings 3 & 4 are bad
+                                        if (!spacingMassRange[4].Contains(spacing4))
+                                        {
+                                            pair.peaks[j + 4, k] = null;
+                                            peakCount--;
+                                            pair.peaks[j + 5, k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                    // Spacing 4 is bad
+                                    else if (!spacingMassRange[4].Contains(spacing4))
+                                    {
+                                        pair.peaks[j + 5, k] = null;
+                                        peakCount--;
+                                    }
+                                }
+                            }
+                            else if (Form1.NOISEBANDCAP && peakCount == 4)
+                            {
+                                if (peak1 != null)
+                                {
+                                    peak1NeutralMass = Mass.MassFromMz(peak1.X, charge);
+
+                                    if (peak2 != null)
+                                    {
+                                        peak2NeutralMass = Mass.MassFromMz(peak2.X, charge);
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                        
+                                        if (peak3 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak3.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+
+                                            // Peaks 1,2,3 & 4
+                                            if (peak4 != null)
+                                            {
+                                                peak4NeutralMass = Mass.MassFromMz(peak4.X, charge);
+                                                spacing3 = peak4NeutralMass - peak3NeutralMass;
+
+                                                // Spacing 1 is bad
+                                                if (!spacingMassRange[0].Contains(spacing1))
+                                                {
+                                                    pair.peaks[j, k] = null;
+                                                    peakCount--;
+
+                                                    // Spacings 1 & 2 are bad
+                                                    if (!spacingMassRange[1].Contains(spacing2))
+                                                    {
+                                                        pair.peaks[j + 1, k] = null;
+                                                        peakCount--;
+
+                                                        // Spacings 1,2 & 3 are bad
+                                                        if (!spacingMassRange[2].Contains(spacing3))
+                                                        {
+                                                            pair.peaks[j + 2, k] = null;
+                                                            peakCount--;
+                                                            pair.peaks[j + 3, k] = null;
+                                                            peakCount--;
+                                                        }
+                                                    }
+                                                    // Spacings 1 & 3 are bad
+                                                    else if (!spacingMassRange[2].Contains(spacing3))
+                                                    {
+                                                        pair.peaks[j + 3, k] = null;
+                                                        peakCount--;
+                                                    }
+                                                }
+                                                // Spacing 2 is bad
+                                                else if (!spacingMassRange[1].Contains(spacing2))
+                                                {
+                                                    // Spacings 2 & 3 are bad
+                                                    if (!spacingMassRange[2].Contains(spacing3))
+                                                    {
+                                                        pair.peaks[j + 2, k] = null;
+                                                        peakCount--;
+                                                        pair.peaks[j + 3, k] = null;
+                                                        peakCount--;
+                                                    }
+                                                }
+                                                // Spacing 3 is bad
+                                                else if (!spacingMassRange[2].Contains(spacing3))
+                                                {
+                                                    pair.peaks[j + 3, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Peaks 1,2,3 & 5
+                                            else if (peak5 != null)
+                                            {
+                                                peak4NeutralMass = Mass.MassFromMz(peak5.X, charge);
+                                                spacing3 = peak4NeutralMass - peak3NeutralMass;
+                                                double extendedTheoSpacing = spacingMassRange[2].Mean + spacingMassRange[3].Mean;
+                                                MassRange doubleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing * SPACINGPERCENTAGEERROR));
+
+                                                // Spacing 1 is bad
+                                                if (!spacingMassRange[0].Contains(spacing1))
+                                                {
+                                                    pair.peaks[j, k] = null;
+                                                    peakCount--;
+
+                                                    // Spacing 1 & 2 are bad
+                                                    if (!spacingMassRange[1].Contains(spacing2))
+                                                    {
+                                                        pair.peaks[j + 1, k] = null;
+                                                        peakCount--;
+                                                        
+                                                        // Spacings 1,2 & 3 are bad
+                                                        if (!doubleSpacing.Contains(spacing3))
+                                                        {
+                                                            pair.peaks[j + 2, k] = null;
+                                                            peakCount--;
+                                                            pair.peaks[j + 4, k] = null;
+                                                            peakCount--;
+                                                        }
+                                                    }
+                                                    // Spacings 1 & 3 are bad
+                                                    else if (!doubleSpacing.Contains(spacing3))
+                                                    {
+                                                        pair.peaks[j + 4, k] = null;
+                                                        peakCount--;
+                                                    }
+                                                }
+                                                // Spacing 2 is bad
+                                                else if (!spacingMassRange[1].Contains(spacing2))
+                                                {
+                                                    // Spacings 2 & 3 are bad
+                                                    if (!doubleSpacing.Contains(spacing3))
+                                                    {
+                                                        pair.peaks[j + 2, k] = null;
+                                                        peakCount--;
+                                                        pair.peaks[j + 4, k] = null;
+                                                        peakCount--;
+                                                    }
+                                                }
+                                                // Spacing 3 is bad
+                                                else if (!doubleSpacing.Contains(spacing3))
+                                                {
+                                                    pair.peaks[j + 4, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Peaks 1,2,3 & 6
+                                            else if (peak6 != null)
+                                            {
+                                                peak4NeutralMass = Mass.MassFromMz(peak6.X, charge);
+                                                spacing3 = peak4NeutralMass - peak3NeutralMass;
+                                                double extendedTheoSpacing = spacingMassRange[2].Mean + spacingMassRange[3].Mean + spacingMassRange[4].Mean;
+                                                MassRange tripleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing * SPACINGPERCENTAGEERROR));
+
+                                                // Spacing 1 is bad
+                                                if (!spacingMassRange[0].Contains(spacing1))
+                                                {
+                                                    pair.peaks[j, k] = null;
+                                                    peakCount--;
+
+                                                    // Spacing 1 & 2 are bad
+                                                    if (!spacingMassRange[1].Contains(spacing2))
+                                                    {
+                                                        pair.peaks[j + 1, k] = null;
+                                                        peakCount--;
+
+                                                        // Spacings 1,2 & 3 are bad
+                                                        if (!tripleSpacing.Contains(spacing3))
+                                                        {
+                                                            pair.peaks[j + 2, k] = null;
+                                                            peakCount--;
+                                                            pair.peaks[j + 5, k] = null;
+                                                            peakCount--;
+                                                        }
+                                                    }
+                                                    // Spacings 1 & 3 are bad
+                                                    else if (!tripleSpacing.Contains(spacing3))
+                                                    {
+                                                        pair.peaks[j + 4, k] = null;
+                                                        peakCount--;
+                                                    }
+                                                }
+                                                // Spacing 2 is bad
+                                                else if (!spacingMassRange[1].Contains(spacing2))
+                                                {
+                                                    // Spacings 2 & 3 are bad
+                                                    if (!tripleSpacing.Contains(spacing3))
+                                                    {
+                                                        pair.peaks[j + 2, k] = null;
+                                                        peakCount--;
+                                                        pair.peaks[j + 5, k] = null;
+                                                        peakCount--;
+                                                    }
+                                                }
+                                                // Spacing 3 is bad
+                                                else if (!tripleSpacing.Contains(spacing3))
+                                                {
+                                                    pair.peaks[j + 5, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                        }
+                                        else if (peak4 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak4.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+                                            double extendedTheoSpacing = spacingMassRange[1].Mean + spacingMassRange[2].Mean;
+                                            MassRange doubleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing * SPACINGPERCENTAGEERROR));
+                                            
+                                            // Peaks 1,2,4 & 5
+                                            if (peak5 != null)
+                                            {
+                                                peak4NeutralMass = Mass.MassFromMz(peak5.X, charge);
+                                                spacing3 = peak4NeutralMass - peak3NeutralMass;
+
+                                                // Spacing 1 is bad
+                                                if (!spacingMassRange[0].Contains(spacing1))
+                                                {
+                                                    pair.peaks[j, k] = null;
+                                                    peakCount--;
+                                                    
+                                                    // Spacings 1 & 2 are bad
+                                                    if (!doubleSpacing.Contains(spacing2))
+                                                    {
+                                                        pair.peaks[j + 1, k] = null;
+                                                        peakCount--;
+
+                                                        // Spacings 1,2 & 3 are bad
+                                                        if (!spacingMassRange[3].Contains(spacing3))
+                                                        {
+                                                            pair.peaks[j + 3, k] = null;
+                                                            peakCount--;
+                                                            pair.peaks[j + 4, k] = null;
+                                                            peakCount--;
+                                                        }
+                                                    }
+                                                    // Spacings 1 & 3 are bad
+                                                    else if (!spacingMassRange[3].Contains(spacing3))
+                                                    {
+                                                        pair.peaks[j + 4, k] = null;
+                                                        peakCount--;
+                                                    }
+                                                }
+                                                // Spacing 2 is bad
+                                                else if (!doubleSpacing.Contains(spacing2))
+                                                {
+                                                    // Spacings 2 & 3 are bad
+                                                    if (!spacingMassRange[3].Contains(spacing3))
+                                                    {
+                                                        pair.peaks[j + 3, k] = null;
+                                                        peakCount--;
+                                                        pair.peaks[j + 4, k] = null;
+                                                        peakCount--;
+                                                    }
+                                                }
+                                                // Spacing 3 is bad
+                                                else if (!spacingMassRange[3].Contains(spacing3))
+                                                {
+                                                    pair.peaks[j + 4, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Peaks 1,2,4 & 6
+                                            else if (peak6 != null)
+                                            {
+                                                peak4NeutralMass = Mass.MassFromMz(peak6.X, charge);
+                                                spacing3 = peak4NeutralMass - peak3NeutralMass;
+                                                double extendedTheoSpacing1 = spacingMassRange[3].Mean + spacingMassRange[4].Mean;
+                                                MassRange doubleSpacing1 = new MassRange(extendedTheoSpacing1, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing1 * SPACINGPERCENTAGEERROR));
+
+                                                // Spacing 1 is bad
+                                                if (!spacingMassRange[0].Contains(spacing1))
+                                                {
+                                                    pair.peaks[j, k] = null;
+                                                    peakCount--;
+
+                                                    // Spacings 1 & 2 are bad
+                                                    if (!doubleSpacing.Contains(spacing2))
+                                                    {
+                                                        pair.peaks[j + 1, k] = null;
+                                                        peakCount--;
+
+                                                        // Spacings 1,2 & 3 are bad
+                                                        if (!doubleSpacing1.Contains(spacing3))
+                                                        {
+                                                            pair.peaks[j + 3, k] = null;
+                                                            peakCount--;
+                                                            pair.peaks[j + 5, k] = null;
+                                                            peakCount--;
+                                                        }
+                                                    }
+                                                    // Spacings 1 & 3 are bad
+                                                    else if (!doubleSpacing1.Contains(spacing3))
+                                                    {
+                                                        pair.peaks[j + 5, k] = null;
+                                                        peakCount--;
+                                                    }
+                                                }
+                                                // Spacing 2 is bad
+                                                else if (!doubleSpacing.Contains(spacing2))
+                                                {
+                                                    // Spacings 2 & 3 are bad
+                                                    if (!doubleSpacing1.Contains(spacing3))
+                                                    {
+                                                        pair.peaks[j + 3, k] = null;
+                                                        peakCount--;
+                                                        pair.peaks[j + 5, k] = null;
+                                                        peakCount--;
+                                                    }
+                                                }
+                                                // Spacing 3 is bad
+                                                else if (!doubleSpacing1.Contains(spacing3))
+                                                {
+                                                    pair.peaks[j + 5, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                        }
+                                        // Peaks 1,2,5 & 6
+                                        else if (peak5 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak5.X, charge);
+                                            peak4NeutralMass = Mass.MassFromMz(peak6.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+                                            spacing3 = peak4NeutralMass - peak3NeutralMass;
+                                            double extendedTheoSpacing = spacingMassRange[1].Mean + spacingMassRange[2].Mean + spacingMassRange[3].Mean;
+                                            MassRange tripleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing * SPACINGPERCENTAGEERROR));
+
+                                            // Spacing 1 is bad
+                                            if (!spacingMassRange[0].Contains(spacing1))
+                                            {
+                                                pair.peaks[j, k] = null;
+                                                peakCount--;
+
+                                                // Spacings 1 & 2 are bad
+                                                if (!tripleSpacing.Contains(spacing2))
+                                                {
+                                                    pair.peaks[j + 1, k] = null;
+                                                    peakCount--;
+
+                                                    // Spacings 1,2 & 3 are bad
+                                                    if (!spacingMassRange[4].Contains(spacing3))
+                                                    {
+                                                        pair.peaks[j + 4, k] = null;
+                                                        peakCount--;
+                                                        pair.peaks[j + 5, k] = null;
+                                                        peakCount--;
+                                                    }
+                                                }
+                                                // Spacings 1 & 3 are bad
+                                                else if (!spacingMassRange[4].Contains(spacing3))
+                                                {
+                                                    pair.peaks[j + 5, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacing 2 is bad
+                                            else if (!tripleSpacing.Contains(spacing2))
+                                            {
+                                                // Spacings 2 & 3 are bad
+                                                if (!spacingMassRange[4].Contains(spacing3))
+                                                {
+                                                    pair.peaks[j + 4, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 5, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacing 3 is bad
+                                            else if (!spacingMassRange[4].Contains(spacing3))
+                                            {
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                    }
+                                    else if (peak3 != null)
+                                    {
+                                        peak2NeutralMass = Mass.MassFromMz(peak3.X, charge);
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                        double extendedTheoSpacing = spacingMassRange[0].Mean + spacingMassRange[1].Mean;
+                                        MassRange doubleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing * SPACINGPERCENTAGEERROR));
+
+                                        if (peak4 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak4.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+                                            
+                                            // Peaks 1,3,4 & 5
+                                            if (peak5 != null)
+                                            {
+                                                peak4NeutralMass = Mass.MassFromMz(peak5.X, charge);
+                                                spacing3 = peak4NeutralMass - peak3NeutralMass;
+
+                                                // Spacing 1 is bad
+                                                if (!doubleSpacing.Contains(spacing1))
+                                                {
+                                                    pair.peaks[j, k] = null;
+                                                    peakCount--;
+
+                                                    // Spacings 1 & 2 are bad
+                                                    if (!spacingMassRange[2].Contains(spacing2))
+                                                    {
+                                                        pair.peaks[j + 2, k] = null;
+                                                        peakCount--;
+
+                                                        // Spacings 1,2 & 3 are bad
+                                                        if (!spacingMassRange[3].Contains(spacing3))
+                                                        {
+                                                            pair.peaks[j + 3, k] = null;
+                                                            peakCount--;
+                                                            pair.peaks[j + 4, k] = null;
+                                                            peakCount--;
+                                                        }
+                                                    }
+                                                    // Spacings 1 & 3 are bad
+                                                    else if (!spacingMassRange[3].Contains(spacing3))
+                                                    {
+                                                        pair.peaks[j + 4, k] = null;
+                                                        peakCount--;
+                                                    }
+                                                }
+                                                // Spacing 2 is bad
+                                                else if (!spacingMassRange[2].Contains(spacing2))
+                                                {
+                                                    // Spacings 2 & 3 are bad
+                                                    if (!spacingMassRange[3].Contains(spacing3))
+                                                    {
+                                                        pair.peaks[j + 3, k] = null;
+                                                        peakCount--;
+                                                        pair.peaks[j + 4, k] = null;
+                                                        peakCount--;
+                                                    }
+                                                }
+                                                // Spacing 3 is bad
+                                                else if (!spacingMassRange[3].Contains(spacing3))
+                                                {
+                                                    pair.peaks[j + 4, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Peaks 1,3,4 & 6
+                                            else if (peak6 != null)
+                                            {
+                                                peak4NeutralMass = Mass.MassFromMz(peak6.X, charge);
+                                                spacing3 = peak4NeutralMass - peak3NeutralMass;
+                                                double extendedTheoSpacing1 = spacingMassRange[3].Mean + spacingMassRange[4].Mean;
+                                                MassRange doubleSpacing1 = new MassRange(extendedTheoSpacing1, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing1 * SPACINGPERCENTAGEERROR));
+
+                                                // Spacing 1 is bad
+                                                if (!doubleSpacing.Contains(spacing1))
+                                                {
+                                                    pair.peaks[j, k] = null;
+                                                    peakCount--;
+
+                                                    // Spacings 1 & 2 are bad
+                                                    if (!spacingMassRange[2].Contains(spacing2))
+                                                    {
+                                                        pair.peaks[j + 2, k] = null;
+                                                        peakCount--;
+
+                                                        // Spacings 1,2 & 3 are bad
+                                                        if (!doubleSpacing1.Contains(spacing3))
+                                                        {
+                                                            pair.peaks[j + 3, k] = null;
+                                                            peakCount--;
+                                                            pair.peaks[j + 5, k] = null;
+                                                            peakCount--;
+                                                        }
+                                                    }
+                                                    // Spacings 1 & 3 are bad
+                                                    else if (!doubleSpacing1.Contains(spacing3))
+                                                    {
+                                                        pair.peaks[j + 5, k] = null;
+                                                        peakCount--;
+                                                    }
+                                                }
+                                                // Spacing 2 is bad
+                                                else if (!spacingMassRange[2].Contains(spacing2))
+                                                {
+                                                    // Spacings 2 & 3 are bad
+                                                    if (!doubleSpacing1.Contains(spacing3))
+                                                    {
+                                                        pair.peaks[j + 3, k] = null;
+                                                        peakCount--;
+                                                        pair.peaks[j + 5, k] = null;
+                                                        peakCount--;
+                                                    }
+                                                }
+                                                // Spacing 3 is bad
+                                                else if (!doubleSpacing1.Contains(spacing3))
+                                                {
+                                                    pair.peaks[j + 5, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                        }
+                                        // Peaks 1,3,5 & 6
+                                        else if (peak5 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak5.X, charge);
+                                            peak4NeutralMass = Mass.MassFromMz(peak6.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+                                            spacing3 = peak4NeutralMass - peak3NeutralMass;
+                                            double extendedTheoSpacing1 = spacingMassRange[2].Mean + spacingMassRange[3].Mean;
+                                            MassRange doubleSpacing1 = new MassRange(extendedTheoSpacing1, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing1 * SPACINGPERCENTAGEERROR));
+
+                                            // Spacing 1 is bad
+                                            if (!doubleSpacing.Contains(spacing1))
+                                            {
+                                                pair.peaks[j, k] = null;
+                                                peakCount--;
+
+                                                // Spacings 1 & 2 are bad
+                                                if (!doubleSpacing1.Contains(spacing2))
+                                                {
+                                                    pair.peaks[j + 2, k] = null;
+                                                    peakCount--;
+
+                                                    // Spacings 1,2 & 3 are bad
+                                                    if (!spacingMassRange[4].Contains(spacing3))
+                                                    {
+                                                        pair.peaks[j + 4, k] = null;
+                                                        peakCount--;
+                                                        pair.peaks[j + 5, k] = null;
+                                                        peakCount--;
+                                                    }
+                                                }
+                                                // Spacings 1 & 3 are bad
+                                                else if (!spacingMassRange[4].Contains(spacing3))
+                                                {
+                                                    pair.peaks[j + 5, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacing 2 is bad
+                                            else if (!doubleSpacing1.Contains(spacing2))
+                                            {
+                                                // Spacings 2 & 3 are bad
+                                                if (!spacingMassRange[4].Contains(spacing3))
+                                                {
+                                                    pair.peaks[j + 4, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 5, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacing 3 is bad
+                                            else if (!spacingMassRange[4].Contains(spacing3))
+                                            {
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                    }
+                                    // Peaks 1,4,5 & 6
+                                    else if (peak4 != null)
+                                    {
+                                        peak2NeutralMass = Mass.MassFromMz(peak4.X, charge);
+                                        peak3NeutralMass = Mass.MassFromMz(peak5.X, charge);
+                                        peak4NeutralMass = Mass.MassFromMz(peak6.X, charge);
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                        spacing2 = peak3NeutralMass - peak2NeutralMass;
+                                        spacing3 = peak4NeutralMass - peak3NeutralMass;
+                                        double extendedTheoSpacing = spacingMassRange[1].Mean + spacingMassRange[2].Mean + spacingMassRange[3].Mean;
+                                        MassRange tripleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing * SPACINGPERCENTAGEERROR));
+
+                                        // Spacing 1 is bad
+                                        if (!tripleSpacing.Contains(spacing1))
+                                        {
+                                            pair.peaks[j, k] = null;
+                                            peakCount--;
+
+                                            // Spacings 1 & 2 are bad
+                                            if (!spacingMassRange[3].Contains(spacing2))
+                                            {
+                                                pair.peaks[j + 3, k] = null;
+                                                peakCount--;
+
+                                                // Spacings 1,2 & 3 are bad
+                                                if (!spacingMassRange[4].Contains(spacing3))
+                                                {
+                                                    pair.peaks[j + 4, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 5, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacings 1 & 3 are bad
+                                            else if (!spacingMassRange[4].Contains(spacing3))
+                                            {
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Spacing 2 is bad
+                                        else if (!spacingMassRange[3].Contains(spacing2))
+                                        {
+                                            // Spacings 2 & 3 are bad
+                                            if (!spacingMassRange[4].Contains(spacing3))
+                                            {
+                                                pair.peaks[j + 4, k] = null;
+                                                peakCount--;
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Spacing 3 is bad
+                                        else if (!spacingMassRange[4].Contains(spacing3))
+                                        {
+                                            pair.peaks[j + 5, k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                }
+                                else if (peak2 != null)
+                                {
+                                    peak1NeutralMass = Mass.MassFromMz(peak1.X, charge);
+
+                                    if (peak3 != null)
+                                    {
+                                        peak2NeutralMass = Mass.MassFromMz(peak3.X, charge);
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+
+                                        if (peak4 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak4.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+
+                                            // Peaks 2,3,4 & 5
+                                            if (peak5 != null)
+                                            {
+                                                peak4NeutralMass = Mass.MassFromMz(peak5.X, charge);
+                                                spacing3 = peak4NeutralMass - peak3NeutralMass;
+
+                                                // Spacing 1 is bad
+                                                if (!spacingMassRange[1].Contains(spacing1))
+                                                {
+                                                    pair.peaks[j + 1, k] = null;
+                                                    peakCount--;
+
+                                                    // Spacings 1 & 2 are bad
+                                                    if (!spacingMassRange[2].Contains(spacing2))
+                                                    {
+                                                        pair.peaks[j + 2, k] = null;
+                                                        peakCount--;
+
+                                                        // Spacings 1,2 & 3 are bad
+                                                        if (!spacingMassRange[3].Contains(spacing3))
+                                                        {
+                                                            pair.peaks[j + 3, k] = null;
+                                                            peakCount--;
+                                                            pair.peaks[j + 4, k] = null;
+                                                            peakCount--;
+                                                        }
+                                                    }
+                                                    // Spacings 1 & 3 are bad
+                                                    else if (!spacingMassRange[3].Contains(spacing3))
+                                                    {
+                                                        pair.peaks[j + 4, k] = null;
+                                                        peakCount--;
+                                                    }
+                                                }
+                                                // Spacing 2 is bad
+                                                else if (!spacingMassRange[2].Contains(spacing2))
+                                                {
+                                                    // Spacings 2 & 3 are bad
+                                                    if (!spacingMassRange[3].Contains(spacing3))
+                                                    {
+                                                        pair.peaks[j + 3, k] = null;
+                                                        peakCount--;
+                                                        pair.peaks[j + 4, k] = null;
+                                                        peakCount--;
+                                                    }
+                                                }
+                                                // Spacing 3 is bad
+                                                else if (!spacingMassRange[3].Contains(spacing3))
+                                                {
+                                                    pair.peaks[j + 4, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Peaks 2,3,4 & 6
+                                            else if (peak6 != null)
+                                            {
+                                                peak4NeutralMass = Mass.MassFromMz(peak6.X, charge);
+                                                spacing3 = peak4NeutralMass - peak3NeutralMass;
+                                                double extendedTheoSpacing = spacingMassRange[3].Mean + spacingMassRange[4].Mean;
+                                                MassRange doubleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing * SPACINGPERCENTAGEERROR));
+
+                                                // Spacing 1 is bad
+                                                if (!spacingMassRange[1].Contains(spacing1))
+                                                {
+                                                    pair.peaks[j + 1, k] = null;
+                                                    peakCount--;
+
+                                                    // Spacings 1 & 2 are bad
+                                                    if (!spacingMassRange[2].Contains(spacing2))
+                                                    {
+                                                        pair.peaks[j + 2, k] = null;
+                                                        peakCount--;
+
+                                                        // Spacings 1,2 & 3 are bad
+                                                        if (!doubleSpacing.Contains(spacing3))
+                                                        {
+                                                            pair.peaks[j + 3, k] = null;
+                                                            peakCount--;
+                                                            pair.peaks[j + 5, k] = null;
+                                                            peakCount--;
+                                                        }
+                                                    }
+                                                    // Spacings 1 & 3 are bad
+                                                    else if (!doubleSpacing.Contains(spacing3))
+                                                    {
+                                                        pair.peaks[j + 5, k] = null;
+                                                        peakCount--;
+                                                    }
+                                                }
+                                                // Spacing 2 is bad
+                                                else if (!spacingMassRange[2].Contains(spacing2))
+                                                {
+                                                    // Spacings 2 & 3 are bad
+                                                    if (!doubleSpacing.Contains(spacing3))
+                                                    {
+                                                        pair.peaks[j + 3, k] = null;
+                                                        peakCount--;
+                                                        pair.peaks[j + 5, k] = null;
+                                                        peakCount--;
+                                                    }
+                                                }
+                                                // Spacing 3 is bad
+                                                else if (!doubleSpacing.Contains(spacing3))
+                                                {
+                                                    pair.peaks[j + 5, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                        }
+                                        // Peaks 2,3,5 & 6
+                                        else if (peak5 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak5.X, charge);
+                                            peak4NeutralMass = Mass.MassFromMz(peak6.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+                                            spacing3 = peak4NeutralMass - peak3NeutralMass;
+                                            double extendedTheoSpacing = spacingMassRange[2].Mean + spacingMassRange[3].Mean;
+                                            MassRange doubleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing * SPACINGPERCENTAGEERROR));
+
+                                            // Spacing 1 is bad
+                                            if (!spacingMassRange[1].Contains(spacing1))
+                                            {
+                                                pair.peaks[j + 1, k] = null;
+                                                peakCount--;
+                                                
+                                                // Spacings 1 & 2 are bad
+                                                if (!doubleSpacing.Contains(spacing2))
+                                                {
+                                                    pair.peaks[j + 2, k] = null;
+                                                    peakCount--;
+                                                    
+                                                    // Spacings 1,2 & 3 are bad
+                                                    if (!spacingMassRange[4].Contains(spacing3))
+                                                    {
+                                                        pair.peaks[j + 4, k] = null;
+                                                        peakCount--;
+                                                        pair.peaks[j + 5, k] = null;
+                                                        peakCount--;
+                                                    }
+                                                }
+                                                // Spacings 1 & 3 are bad
+                                                else if (!spacingMassRange[4].Contains(spacing3))
+                                                {
+                                                    pair.peaks[j + 5, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacing 2 is bad
+                                            else if (!doubleSpacing.Contains(spacing2))
+                                            {
+                                                // Spacings 2 & 3 are bad
+                                                if (!spacingMassRange[4].Contains(spacing3))
+                                                {
+                                                    pair.peaks[j + 4, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 5, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacing 3 is bad
+                                            else if (!spacingMassRange[4].Contains(spacing3))
+                                            {
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                    }
+                                    // Peaks 2,4,5 & 6
+                                    else if (peak4 != null)
+                                    {
+                                        peak2NeutralMass = Mass.MassFromMz(peak4.X, charge);
+                                        peak3NeutralMass = Mass.MassFromMz(peak5.X, charge);
+                                        peak4NeutralMass = Mass.MassFromMz(peak6.X, charge);
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                        spacing2 = peak3NeutralMass - peak2NeutralMass;
+                                        spacing3 = peak4NeutralMass - peak3NeutralMass;
+                                        double extendedTheoSpacing = spacingMassRange[1].Mean + spacingMassRange[2].Mean;
+                                        MassRange doubleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing * SPACINGPERCENTAGEERROR));
+
+                                        // Spacing 1 is bad
+                                        if (!doubleSpacing.Contains(spacing1))
+                                        {
+                                            pair.peaks[j + 1, k] = null;
+                                            peakCount--;
+
+                                            // Spacings 1 & 2 are bad
+                                            if (!spacingMassRange[3].Contains(spacing2))
+                                            {
+                                                pair.peaks[j + 3, k] = null;
+                                                peakCount--;
+
+                                                // Spacings 1,2 & 3 are bad
+                                                if (!spacingMassRange[4].Contains(spacing3))
+                                                {
+                                                    pair.peaks[j + 4, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 5, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacings 1 & 3 are bad
+                                            else if (!spacingMassRange[4].Contains(spacing3))
+                                            {
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Spacing 2 is bad
+                                        else if (!spacingMassRange[3].Contains(spacing2))
+                                        {
+                                            // Spacings 2 & 3 are bad
+                                            if (!spacingMassRange[4].Contains(spacing3))
+                                            {
+                                                pair.peaks[j + 4, k] = null;
+                                                peakCount--;
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Spacing 3 is bad
+                                        else if (!spacingMassRange[4].Contains(spacing3))
+                                        {
+                                            pair.peaks[j + 5, k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                }
+                                // Peaks 3,4,5 & 6
+                                else if (peak3 != null)
+                                {
+                                    peak1NeutralMass = Mass.MassFromMz(peak3.X, charge);
+                                    peak2NeutralMass = Mass.MassFromMz(peak4.X, charge);
+                                    peak3NeutralMass = Mass.MassFromMz(peak5.X, charge);
+                                    peak4NeutralMass = Mass.MassFromMz(peak6.X, charge);
+                                    spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                    spacing2 = peak3NeutralMass - peak2NeutralMass;
+                                    spacing3 = peak4NeutralMass - peak3NeutralMass;
+
+                                    // Spacing 1 is bad
+                                    if (!spacingMassRange[2].Contains(spacing1))
+                                    {
+                                        pair.peaks[j + 2, k] = null;
+                                        peakCount--;
+                                        
+                                        // Spacings 1 & 2 are bad
+                                        if (!spacingMassRange[3].Contains(spacing2))
+                                        {
+                                            pair.peaks[j + 3, k] = null;
+                                            peakCount--;
+                                            
+                                            // Spacings 1,2 & 3 are bad
+                                            if (!spacingMassRange[4].Contains(spacing3))
+                                            {
+                                                pair.peaks[j + 4, k] = null;
+                                                peakCount--;
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Spacings 1 & 3 are bad
+                                        else if (!spacingMassRange[4].Contains(spacing3))
+                                        {
+                                            pair.peaks[j + 5, k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                    // Spacing 2 is bad
+                                    else if (!spacingMassRange[3].Contains(spacing2))
+                                    {
+                                        // Spacings 2 & 3 are bad
+                                        if (!spacingMassRange[4].Contains(spacing3))
+                                        {
+                                            pair.peaks[j + 4, k] = null;
+                                            peakCount--;
+                                            pair.peaks[j + 5, k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                    // Spacing 3 is bad
+                                    else if (!spacingMassRange[4].Contains(spacing3))
+                                    {
+                                        pair.peaks[j + 5, k] = null;
+                                        peakCount--;
+                                    }
+                                }
+                            }
+                            else if (Form1.NOISEBANDCAP && peakCount == 3)
+                            {
+                                if (peak1 != null)
+                                {
+                                    peak1NeutralMass = Mass.MassFromMz(peak1.X, charge);
+                                    
+                                    if (peak2 != null)
+                                    {
+                                        peak2NeutralMass = Mass.MassFromMz(peak2.X, charge);
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+
+                                        // Peaks 1,2 & 3
+                                        if (peak3 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak3.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+
+                                            // Spacing 1 is bad
+                                            if (!spacingMassRange[0].Contains(spacing1))
+                                            {
+                                                pair.peaks[j, k] = null;
+                                                peakCount--;
+
+                                                // Spacing 1 & 2 are bad
+                                                if (!spacingMassRange[1].Contains(spacing2))
+                                                {
+                                                    pair.peaks[j + 1, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 2, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacing 2 is bad
+                                            else if (!spacingMassRange[1].Contains(spacing2))
+                                            {
+                                                pair.peaks[j + 2, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Peaks 1,2 & 4
+                                        else if (peak4 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak4.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+                                            double extendedTheoSpacing = spacingMassRange[1].Mean + spacingMassRange[2].Mean;
+                                            MassRange doubleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing * SPACINGPERCENTAGEERROR));
+
+                                            // Spacing 1 is bad
+                                            if (!spacingMassRange[0].Contains(spacing1))
+                                            {
+                                                pair.peaks[j, k] = null;
+                                                peakCount--;
+
+                                                // Spacing 1 & 2 are bad
+                                                if (!doubleSpacing.Contains(spacing2))
+                                                {
+                                                    pair.peaks[j + 1, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 3, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacing 2 is bad
+                                            else if (!doubleSpacing.Contains(spacing2))
+                                            {
+                                                pair.peaks[j + 3, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Peaks 1,2 & 5
+                                        else if (peak5 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak5.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+                                            double extendedTheoSpacing = spacingMassRange[1].Mean + spacingMassRange[2].Mean + spacingMassRange[3].Mean;
+                                            MassRange tripleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing * SPACINGPERCENTAGEERROR));
+
+                                            // Spacing 1 is bad
+                                            if (!spacingMassRange[0].Contains(spacing1))
+                                            {
+                                                pair.peaks[j, k] = null;
+                                                peakCount--;
+
+                                                // Spacing 1 & 2 are bad
+                                                if (!tripleSpacing.Contains(spacing2))
+                                                {
+                                                    pair.peaks[j + 1, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 4, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacing 2 is bad
+                                            else if (!tripleSpacing.Contains(spacing2))
+                                            {
+                                                pair.peaks[j + 4, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Peaks 1,2 & 6
+                                        else if (peak6 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak6.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+                                            double extendedTheoSpacing = spacingMassRange[1].Mean + spacingMassRange[2].Mean + spacingMassRange[3].Mean + spacingMassRange[4].Mean;
+                                            MassRange quadrupleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing * SPACINGPERCENTAGEERROR));
+
+                                            // Spacing 1 is bad
+                                            if (!spacingMassRange[0].Contains(spacing1))
+                                            {
+                                                pair.peaks[j, k] = null;
+                                                peakCount--;
+
+                                                // Spacing 1 & 2 are bad
+                                                if (!quadrupleSpacing.Contains(spacing2))
+                                                {
+                                                    pair.peaks[j + 1, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 5, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacing 2 is bad
+                                            else if (!quadrupleSpacing.Contains(spacing2))
+                                            {
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                    }
+                                    else if (peak3 != null)
+                                    {
+                                        peak2NeutralMass = Mass.MassFromMz(peak3.X, charge);
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                        double extendedTheoSpacing = spacingMassRange[0].Mean + spacingMassRange[1].Mean;
+                                        MassRange doubleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing * SPACINGPERCENTAGEERROR));
+                                        
+                                        // Peaks 1,3 & 4
+                                        if (peak4 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak4.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+
+                                            // Spacing 1 is bad
+                                            if (!doubleSpacing.Contains(spacing1))
+                                            {
+                                                pair.peaks[j, k] = null;
+                                                peakCount--;
+
+                                                // Spacing 1 & 2 are bad
+                                                if (!spacingMassRange[2].Contains(spacing2))
+                                                {
+                                                    pair.peaks[j + 2, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 3, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacing 2 is bad
+                                            else if (!spacingMassRange[2].Contains(spacing2))
+                                            {
+                                                pair.peaks[j + 3, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Peaks 1,3 & 5
+                                        else if (peak5 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak5.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+                                            double extendedTheoSpacing1 = spacingMassRange[2].Mean + spacingMassRange[3].Mean;
+                                            MassRange doubleSpacing1 = new MassRange(extendedTheoSpacing1, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing1 * SPACINGPERCENTAGEERROR));
+
+                                            // Spacing 1 is bad
+                                            if (!doubleSpacing.Contains(spacing1))
+                                            {
+                                                pair.peaks[j, k] = null;
+                                                peakCount--;
+
+                                                // Spacing 1 & 2 are bad
+                                                if (!doubleSpacing1.Contains(spacing2))
+                                                {
+                                                    pair.peaks[j + 2, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 4, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacing 2 is bad
+                                            else if (!doubleSpacing1.Contains(spacing2))
+                                            {
+                                                pair.peaks[j + 4, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Peaks 1,3 & 6
+                                        else if (peak6 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak6.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+                                            double extendedTheoSpacing2 = spacingMassRange[2].Mean + spacingMassRange[3].Mean + spacingMassRange[4].Mean;
+                                            MassRange tripleSpacing = new MassRange(extendedTheoSpacing2, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing2 * SPACINGPERCENTAGEERROR));
+
+                                            // Spacing 1 is bad
+                                            if (!doubleSpacing.Contains(spacing1))
+                                            {
+                                                pair.peaks[j, k] = null;
+                                                peakCount--;
+
+                                                // Spacing 1 & 2 are bad
+                                                if (!tripleSpacing.Contains(spacing2))
+                                                {
+                                                    pair.peaks[j + 2, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 5, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacing 2 is bad
+                                            else if (!tripleSpacing.Contains(spacing2))
+                                            {
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                    }
+                                    else if (peak4 != null)
+                                    {
+                                        peak2NeutralMass = Mass.MassFromMz(peak4.X, charge);
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                        double extendedTheoSpacing = spacingMassRange[0].Mean + spacingMassRange[1].Mean + spacingMassRange[2].Mean;
+                                        MassRange tripleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing * SPACINGPERCENTAGEERROR));
+                                        
+                                        // Peaks 1,4 & 5
+                                        if (peak5 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak5.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+
+                                            // Spacing 1 is bad
+                                            if (!tripleSpacing.Contains(spacing1))
+                                            {
+                                                pair.peaks[j, k] = null;
+                                                peakCount--;
+                                                
+                                                // Spacings 1 & 2 are bad
+                                                if (!spacingMassRange[3].Contains(spacing2))
+                                                {
+                                                    pair.peaks[j + 3, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 4, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacing 2 is bad
+                                            else if (!spacingMassRange[3].Contains(spacing2))
+                                            {
+                                                pair.peaks[j + 4, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Peaks 1,4 & 6
+                                        else if (peak6 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak6.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+                                            double extendedTheoSpacing1 = spacingMassRange[3].Mean + spacingMassRange[4].Mean;
+                                            MassRange doubleSpacing = new MassRange(extendedTheoSpacing1, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing1 * SPACINGPERCENTAGEERROR));
+
+                                            // Spacing 1 is bad
+                                            if (!tripleSpacing.Contains(spacing1))
+                                            {
+                                                pair.peaks[j, k] = null;
+                                                peakCount--;
+
+                                                // Spacings 1 & 2 are bad
+                                                if (!doubleSpacing.Contains(spacing2))
+                                                {
+                                                    pair.peaks[j + 3, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 5, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacing 2 is bad
+                                            else if (!doubleSpacing.Contains(spacing2))
+                                            {
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                    }
+                                    // Peaks 1,5 & 6
+                                    else if (peak5 != null)
+                                    {
+                                        peak2NeutralMass = Mass.MassFromMz(peak5.X, charge);
+                                        peak3NeutralMass = Mass.MassFromMz(peak6.X, charge);
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                        spacing2 = peak3NeutralMass - peak2NeutralMass;
+                                        double extendedTheoSpacing = spacingMassRange[0].Mean + spacingMassRange[1].Mean + spacingMassRange[2].Mean + spacingMassRange[3].Mean;
+                                        MassRange quadrupleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing * SPACINGPERCENTAGEERROR));
+
+                                        // Spacing 1 is bad
+                                        if (!quadrupleSpacing.Contains(spacing1))
+                                        {
+                                            pair.peaks[j, k] = null;
+                                            peakCount--;
+                                            
+                                            // Spacings 1 & 2 are bad
+                                            if (!spacingMassRange[4].Contains(spacing2))
+                                            {
+                                                pair.peaks[j + 4, k] = null;
+                                                peakCount--;
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Spacing 2 is bad
+                                        else if (!spacingMassRange[4].Contains(spacing2))
+                                        {
+                                            pair.peaks[j + 5, k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                }
+                                else if (peak2 != null)
+                                {
+                                    peak1NeutralMass = Mass.MassFromMz(peak2.X, charge);
+
+                                    if (peak3 != null)
+                                    {
+                                        peak2NeutralMass = Mass.MassFromMz(peak3.X, charge);
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                        
+                                        // Peaks 2,3 & 4
+                                        if (peak4 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak4.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+
+                                            // Spacing 1 is bad
+                                            if (!spacingMassRange[1].Contains(spacing1))
+                                            {
+                                                pair.peaks[j + 1, k] = null;
+                                                peakCount--;
+                                                
+                                                // Spacings 1 & 2 are bad
+                                                if (!spacingMassRange[2].Contains(spacing2))
+                                                {
+                                                    pair.peaks[j + 2, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 3, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacing 2 is bad
+                                            else if (!spacingMassRange[2].Contains(spacing2))
+                                            {
+                                                pair.peaks[j + 3, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Peaks 2,3 & 5
+                                        else if (peak5 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak5.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+                                            double extendedTheoSpacing = spacingMassRange[2].Mean + spacingMassRange[3].Mean;
+                                            MassRange doubleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing * SPACINGPERCENTAGEERROR));
+
+                                            // Spacing 1 is bad
+                                            if (!spacingMassRange[1].Contains(spacing1))
+                                            {
+                                                pair.peaks[j + 1, k] = null;
+                                                peakCount--;
+
+                                                // Spacings 1 & 2 are bad
+                                                if (!doubleSpacing.Contains(spacing2))
+                                                {
+                                                    pair.peaks[j + 2, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 4, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacing 2 is bad
+                                            else if (!doubleSpacing.Contains(spacing2))
+                                            {
+                                                pair.peaks[j + 4, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Peaks 2,3 & 6
+                                        else if (peak6 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak6.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+                                            double extendedTheoSpacing = spacingMassRange[2].Mean + spacingMassRange[3].Mean + spacingMassRange[4].Mean;
+                                            MassRange tripleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing * SPACINGPERCENTAGEERROR));
+
+                                            // Spacing 1 is bad
+                                            if (!spacingMassRange[1].Contains(spacing1))
+                                            {
+                                                pair.peaks[j + 1, k] = null;
+                                                peakCount--;
+
+                                                // Spacings 1 & 2 are bad
+                                                if (!tripleSpacing.Contains(spacing2))
+                                                {
+                                                    pair.peaks[j + 2, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 5, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacing 2 is bad
+                                            else if (!tripleSpacing.Contains(spacing2))
+                                            {
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                    }
+                                    else if (peak4 != null)
+                                    {
+                                        peak2NeutralMass = Mass.MassFromMz(peak4.X, charge);
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                        double extendedTheoSpacing = spacingMassRange[1].Mean + spacingMassRange[2].Mean;
+                                        MassRange doubleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing * SPACINGPERCENTAGEERROR));
+                                        
+                                        // Peaks 2,4 & 5
+                                        if (peak5 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak5.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+
+                                            // Spacing 1 is bad
+                                            if (!doubleSpacing.Contains(spacing1))
+                                            {
+                                                pair.peaks[j + 1, k] = null;
+                                                peakCount--;
+                                                
+                                                // Spacings 1 & 2 are bad
+                                                if (!spacingMassRange[3].Contains(spacing2))
+                                                {
+                                                    pair.peaks[j + 3, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 4, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacing 2 is bad
+                                            else if (!spacingMassRange[3].Contains(spacing2))
+                                            {
+                                                pair.peaks[j + 4, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Peaks 2,4 & 6
+                                        else if (peak6 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak6.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+                                            double extendedTheoSpacing1 = spacingMassRange[3].Mean + spacingMassRange[4].Mean;
+                                            MassRange doubleSpacing1 = new MassRange(extendedTheoSpacing1, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing1 * SPACINGPERCENTAGEERROR));
+
+                                            // Spacing 1 is bad
+                                            if (!doubleSpacing.Contains(spacing1))
+                                            {
+                                                pair.peaks[j + 1, k] = null;
+                                                peakCount--;
+
+                                                // Spacings 1 & 2 are bad
+                                                if (!doubleSpacing1.Contains(spacing2))
+                                                {
+                                                    pair.peaks[j + 3, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 5, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacing 2 is bad
+                                            else if (!doubleSpacing1.Contains(spacing2))
+                                            {
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                    }
+                                    // Peaks 2,5 & 6
+                                    else if (peak5 != null)
+                                    {
+                                        peak2NeutralMass = Mass.MassFromMz(peak5.X, charge);
+                                        peak3NeutralMass = Mass.MassFromMz(peak6.X, charge);
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                        spacing2 = peak3NeutralMass - peak2NeutralMass;
+                                        double extendedTheoSpacing = spacingMassRange[1].Mean + spacingMassRange[2].Mean + spacingMassRange[3].Mean;
+                                        MassRange tripleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing * SPACINGPERCENTAGEERROR));
+
+                                        // Spacing 1 is bad
+                                        if (!tripleSpacing.Contains(spacing1))
+                                        {
+                                            pair.peaks[j + 1, k] = null;
+                                            peakCount--;
+                                            
+                                            // Spacings 1 & 2 are bad
+                                            if (!spacingMassRange[4].Contains(spacing2))
+                                            {
+                                                pair.peaks[j + 4, k] = null;
+                                                peakCount--;
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Spacing 2 is bad
+                                        else if (!spacingMassRange[4].Contains(spacing2))
+                                        {
+                                            pair.peaks[j + 5, k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                }
+                                else if (peak3 != null)
+                                {
+                                    peak1NeutralMass = Mass.MassFromMz(peak3.X, charge);
+                                    
+                                    if (peak4 != null)
+                                    {
+                                        peak2NeutralMass = Mass.MassFromMz(peak4.X, charge);
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                        
+                                        // Peaks 3,4 & 5
+                                        if (peak5 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak5.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+
+                                            // Spacing 1 is bad
+                                            if (!spacingMassRange[2].Contains(spacing1))
+                                            {
+                                                pair.peaks[j + 2, k] = null;
+                                                peakCount--;
+                                                
+                                                // Spacings 1 & 2 are bad
+                                                if (!spacingMassRange[3].Contains(spacing2))
+                                                {
+                                                    pair.peaks[j + 3, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 4, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacing 2 is bad
+                                            else if (!spacingMassRange[3].Contains(spacing2))
+                                            {
+                                                pair.peaks[j + 4, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Peaks 3,4 & 6
+                                        else if (peak6 != null)
+                                        {
+                                            peak3NeutralMass = Mass.MassFromMz(peak6.X, charge);
+                                            spacing2 = peak3NeutralMass - peak2NeutralMass;
+                                            double extendedTheoSpacing = spacingMassRange[3].Mean + spacingMassRange[4].Mean;
+                                            MassRange doubleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing * SPACINGPERCENTAGEERROR));
+
+                                            // Spacing 1 is bad
+                                            if (!spacingMassRange[2].Contains(spacing1))
+                                            {
+                                                pair.peaks[j + 2, k] = null;
+                                                peakCount--;
+
+                                                // Spacings 1 & 2 are bad
+                                                if (!doubleSpacing.Contains(spacing2))
+                                                {
+                                                    pair.peaks[j + 3, k] = null;
+                                                    peakCount--;
+                                                    pair.peaks[j + 5, k] = null;
+                                                    peakCount--;
+                                                }
+                                            }
+                                            // Spacing 2 is bad
+                                            else if (!doubleSpacing.Contains(spacing2))
+                                            {
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                    }
+                                    // Peaks 3,5 & 6
+                                    else if (peak5 != null)
+                                    {
+                                        peak2NeutralMass = Mass.MassFromMz(peak5.X, charge);
+                                        peak3NeutralMass = Mass.MassFromMz(peak6.X, charge);
+                                        spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                        spacing2 = peak3NeutralMass - peak2NeutralMass;
+                                        double extendedTheoSpacing = spacingMassRange[2].Mean + spacingMassRange[3].Mean;
+                                        MassRange doubleSpacing = new MassRange(extendedTheoSpacing, new MassTolerance(MassToleranceType.DA, extendedTheoSpacing * SPACINGPERCENTAGEERROR));
+
+                                        // Spacing 1 is bad
+                                        if (!doubleSpacing.Contains(spacing1))
+                                        {
+                                            pair.peaks[j + 2, k] = null;
+                                            peakCount--;
+
+                                            // Spacings 1 & 2 are bad
+                                            if (!spacingMassRange[4].Contains(spacing2))
+                                            {
+                                                pair.peaks[j + 4, k] = null;
+                                                peakCount--;
+                                                pair.peaks[j + 5, k] = null;
+                                                peakCount--;
+                                            }
+                                        }
+                                        // Spacing 2 is bad
+                                        else if (!spacingMassRange[4].Contains(spacing2))
+                                        {
+                                            pair.peaks[j + 5, k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                }
+                                // Peaks 4,5 & 6
+                                else if (peak4 != null)
+                                {
+                                    peak1NeutralMass = Mass.MassFromMz(peak4.X, charge);
+                                    peak2NeutralMass = Mass.MassFromMz(peak5.X, charge);
+                                    peak3NeutralMass = Mass.MassFromMz(peak6.X, charge);
+                                    spacing1 = peak2NeutralMass - peak1NeutralMass;
+                                    spacing2 = peak3NeutralMass - peak2NeutralMass;
+
+                                    // Spacing 1 is bad
+                                    if (!spacingMassRange[3].Contains(spacing1))
+                                    {
+                                        pair.peaks[j + 3, k] = null;
+                                        peakCount--;
+
+                                        // Spacings 1 & 2 are bad
+                                        if (!spacingMassRange[4].Contains(spacing2))
+                                        {
+                                            pair.peaks[j + 4, k] = null;
+                                            peakCount--;
+                                            pair.peaks[j + 5, k] = null;
+                                            peakCount--;
+                                        }
+                                    }
+                                    // Spacing 2 is bad
+                                    else if (!spacingMassRange[4].Contains(spacing2))
+                                    {
+                                        pair.peaks[j + 5, k] = null;
+                                        peakCount--;
+                                    }
+                                }
+                            }
+                            else if (Form1.NOISEBANDCAP && peakCount < 3)
+                            {
+                                pair.peaks[j, k] = null;
+                                pair.peaks[j + 1, k] = null;
+                                pair.peaks[j + 2, k] = null;
+                                pair.peaks[j + 3, k] = null;
+                                pair.peaks[j + 4, k] = null;
+                                pair.peaks[j + 5, k] = null;
+                            }
+
+                            if (peakCount < peaksNeeded)
                             {
                                 pair.peaks[j, k] = null;
                                 pair.peaks[j + 1, k] = null;
@@ -2973,6 +5257,7 @@ namespace Coon.NeuQuant
                     }
                 }
             }
+            // When noise-band capping not enabled, add pairs to complete list
             if (!Form1.NOISEBANDCAP)
             {
                 List<Pair> completePairList;
@@ -2986,310 +5271,7 @@ namespace Coon.NeuQuant
                     }
                 }
                 pairs.Clear();
-
             }
-
-            
-
-            //if (numIsotopologues == 4)
-            //{
-            //    for (int p = 0; p < pairs.Count(); p++)
-            //    {
-            //        pair = pairs[p];
-            //        int peakCount;
-
-            //        for (int c = 0; c < numClusters; c++)
-            //        {
-            //            for (int j = 0; j < numIsotopes; j ++)
-            //            {
-            //                peakCount = 0;
-            //                int channelIndex = c * numIsotopologues;
-            //                for (int i = c; i < c + numIsotopologues; i += numIsotopologues)
-            //                { 
-            //                    peak1 = pair.peaks[channelIndex, j];
-            //                    peak2 = pair.peaks[channelIndex + 1, j];
-            //                    peak3 = pair.peaks[channelIndex + 2, j];
-            //                    peak4 = pair.peaks[channelIndex + 3, j];
-            //                    if (peak1 != null)
-            //                    {
-            //                        peakCount++;
-            //                    }
-            //                    if (peak2 != null)
-            //                    {
-            //                        peakCount++;
-            //                    }
-            //                    if (peak3 != null)
-            //                    {
-            //                        peakCount++;
-            //                    }
-            //                    if (peak4 != null)
-            //                    {
-            //                        peakCount++;
-            //                    }
-
-            //                    // First consider complete pairs
-            //                    if (peakCount == 4)
-            //                    {
-            //                        peak1NeutralMass = Mass.MassFromMz(peak1.X, charge);
-            //                        peak2NeutralMass = Mass.MassFromMz(peak2.X, charge);
-            //                        peak3NeutralMass = Mass.MassFromMz(peak3.X, charge);
-            //                        peak4NeutralMass = Mass.MassFromMz(peak4.X, charge);
-
-            //                        spacing1 = peak4NeutralMass - peak3NeutralMass;
-            //                        spacing2 = peak3NeutralMass - peak2NeutralMass;
-            //                        spacing3 = peak2NeutralMass - peak1NeutralMass;
-
-            //                        if (Form1.NOISEBANDCAP)
-            //                        {
-            //                            if (spacing1 < spacingMassRange.Minimum || spacing1 > spacingMassRange.Maximum)
-            //                            {
-            //                                pair.peaks[channelIndex + 3, j] = null;
-            //                                peakCount--;
-            //                            }
-            //                            if (spacing2 < spacingMassRange.Minimum || spacing2 > spacingMassRange.Maximum)
-            //                            {
-            //                                pair.peaks[channelIndex + 2, j] = null;
-            //                                peakCount--;
-            //                            }
-            //                            if (spacing3 < spacingMassRange.Minimum || spacing3 > spacingMassRange.Maximum)
-            //                            {
-            //                                pair.peaks[channelIndex, j] = null;
-            //                                peakCount--;
-            //                                pair.peaks[channelIndex + 1, j] = null;
-            //                                peakCount--;
-            //                            }
-
-            //                            // Verify that enough peaks are still present
-            //                            if (peakCount < peaksNeeded)
-            //                            {
-            //                                pair.peaks[channelIndex, j] = null;
-            //                                pair.peaks[channelIndex + 1, j] = null;
-            //                                pair.peaks[channelIndex + 2, j] = null;
-            //                                pair.peaks[channelIndex + 3, j] = null;
-            //                            }
-            //                        }
-            //                        else
-            //                        {
-            //                            if (spacing1 < spacingMassRange.Minimum || spacing1 > spacingMassRange.Maximum || spacing1 < spacingMassRange.Minimum || spacing1 > spacingMassRange.Maximum || spacing3 < spacingMassRange.Minimum || spacing3 > spacingMassRange.Maximum)
-            //                            {
-            //                                pair.peaks[channelIndex, j] = null;
-            //                                pair.peaks[channelIndex + 1, j] = null;
-            //                                pair.peaks[channelIndex + 2, j] = null;
-            //                                pair.peaks[channelIndex + 3, j] = null;
-            //                            }
-            //                        }
-            //                    }
-            //                    else if (peakCount == 3)
-            //                    {
-            //                        if (Form1.NOISEBANDCAP)
-            //                        {
-            //                            if (peak1 != null)
-            //                            {
-            //                                peak1NeutralMass = Mass.MassFromMz(peak1.X, charge);
-            //                                if (peak2 != null && peak3 != null) // peaks 1,2,3
-            //                                {
-            //                                    peak2NeutralMass = Mass.MassFromMz(peak2.X, charge);
-            //                                    peak3NeutralMass = Mass.MassFromMz(peak3.X, charge);
-            //                                    spacing1 = peak3NeutralMass - peak2NeutralMass;
-            //                                    spacing2 = peak2NeutralMass - peak1NeutralMass;
-            //                                    if (spacing1 > spacingMassRange.Maximum || spacing1 < spacingMassRange.Minimum)
-            //                                    {
-            //                                        pair.peaks[channelIndex + 2, j] = null;
-            //                                        peakCount--;
-            //                                    }
-            //                                    if (spacing2 > spacingMassRange.Maximum || spacing2 < spacingMassRange.Minimum)
-            //                                    {
-            //                                        pair.peaks[channelIndex + 1, j] = null;
-            //                                        peakCount--;
-            //                                        pair.peaks[channelIndex, j] = null;
-            //                                        peakCount--;
-            //                                    }
-            //                                }
-            //                                else if (peak3 != null && peak4 != null) // peaks 1,3,4
-            //                                {
-            //                                    peak3NeutralMass = Mass.MassFromMz(peak3.X, charge);
-            //                                    peak4NeutralMass = Mass.MassFromMz(peak4.X, charge);
-            //                                    spacing1 = peak4NeutralMass - peak3NeutralMass;
-            //                                    spacing2 = (peak3NeutralMass - peak1NeutralMass) / 2.0;
-            //                                    if (spacing1 > spacingMassRange.Maximum || spacing1 < spacingMassRange.Minimum)
-            //                                    {
-            //                                        pair.peaks[channelIndex + 3, j] = null;
-            //                                        peakCount--;
-            //                                    }
-            //                                    if (spacing2 > spacingMassRange.Maximum || spacing2 < spacingMassRange.Minimum)
-            //                                    {
-            //                                        pair.peaks[channelIndex + 2, j] = null;
-            //                                        peakCount--;
-            //                                        pair.peaks[channelIndex, j] = null;
-            //                                        peakCount--;
-            //                                    }
-            //                                }
-            //                                else // peaks 1,2,4
-            //                                {
-            //                                    peak2NeutralMass = Mass.MassFromMz(peak2.X, charge);
-            //                                    peak4NeutralMass = Mass.MassFromMz(peak4.X, charge);
-            //                                    spacing1 = (peak4NeutralMass - peak2NeutralMass) / 2.0;
-            //                                    spacing2 = peak2NeutralMass - peak1NeutralMass;
-            //                                    if (spacing1 > spacingMassRange.Maximum || spacing1 < spacingMassRange.Minimum)
-            //                                    {
-            //                                        pair.peaks[channelIndex + 3, j] = null;
-            //                                        peakCount--;
-            //                                    }
-            //                                    if (spacing2 > spacingMassRange.Maximum || spacing2 < spacingMassRange.Minimum)
-            //                                    {
-            //                                        pair.peaks[channelIndex + 1, j] = null;
-            //                                        peakCount--;
-            //                                        pair.peaks[channelIndex, j] = null;
-            //                                        peakCount--;
-            //                                    }
-            //                                }
-            //                            }
-            //                            else 
-            //                            {
-            //                                peak2NeutralMass = Mass.MassFromMz(peak2.X, charge);
-            //                                peak3NeutralMass = Mass.MassFromMz(peak3.X, charge);
-            //                                peak4NeutralMass = Mass.MassFromMz(peak4.X, charge);
-            //                                spacing1 = peak4NeutralMass - peak3NeutralMass;
-            //                                spacing2 = peak3NeutralMass - peak2NeutralMass;
-            //                                if (spacing1 > spacingMassRange.Maximum || spacing1 < spacingMassRange.Minimum)
-            //                                {
-            //                                    pair.peaks[channelIndex + 3, j] = null;
-            //                                    peakCount--;
-            //                                }
-            //                                if (spacing2 > spacingMassRange.Maximum || spacing2 < spacingMassRange.Minimum)
-            //                                {
-            //                                    pair.peaks[channelIndex + 2, j] = null;
-            //                                    peakCount--;
-            //                                    pair.peaks[channelIndex + 1, j] = null;
-            //                                    peakCount--;
-            //                                }
-            //                            }
-
-            //                            // Verify that enough peaks are still present
-            //                            if (peakCount < peaksNeeded)
-            //                            {
-            //                                pair.peaks[channelIndex, j] = null;
-            //                                pair.peaks[channelIndex + 1, j] = null;
-            //                                pair.peaks[channelIndex + 2, j] = null;
-            //                                pair.peaks[channelIndex + 3, j] = null;
-            //                            }
-            //                        }
-            //                        else
-            //                        {
-            //                            pair.peaks[channelIndex, j] = null;
-            //                            pair.peaks[channelIndex + 1, j] = null;
-            //                            pair.peaks[channelIndex + 2, j] = null;
-            //                            pair.peaks[channelIndex + 3, j] = null;
-            //                        }
-            //                    }
-            //                    else if (peakCount == 2)
-            //                    {
-            //                        if (Form1.NOISEBANDCAP)
-            //                        {
-            //                            if (peak1 != null)
-            //                            {
-            //                                peak1NeutralMass = Mass.MassFromMz(peak1.X, charge);
-            //                                if (peak2 != null)
-            //                                {
-            //                                    peak2NeutralMass = Mass.MassFromMz(peak2.X, charge);
-            //                                    spacing1 = peak2NeutralMass - peak1NeutralMass;
-            //                                }
-            //                                else if (peak3 != null)
-            //                                {
-            //                                    peak3NeutralMass = Mass.MassFromMz(peak3.X, charge);
-            //                                    spacing1 = (peak3NeutralMass - peak1NeutralMass) / 2.0;
-            //                                }
-            //                                else
-            //                                {
-            //                                    peak4NeutralMass = Mass.MassFromMz(peak4.X, charge);
-            //                                    spacing1 = (peak4NeutralMass - peak1NeutralMass) / 3.0;
-            //                                }
-            //                            }
-            //                            else if (peak2 != null)
-            //                            {
-            //                                peak2NeutralMass = Mass.MassFromMz(peak2.X, charge);
-            //                                if (peak3 != null)
-            //                                {
-            //                                    peak3NeutralMass = Mass.MassFromMz(peak3.X, charge);
-            //                                    spacing1 = peak3NeutralMass - peak2NeutralMass;
-            //                                }
-            //                                else if (peak4 != null)
-            //                                {
-            //                                    peak4NeutralMass = Mass.MassFromMz(peak4.X, charge);
-            //                                    spacing1 = (peak4NeutralMass - peak2NeutralMass) / 2.0;
-            //                                }
-            //                                else
-            //                                {
-            //                                    peak1NeutralMass = Mass.MassFromMz(peak1.X, charge);
-            //                                    spacing1 = peak2NeutralMass - peak1NeutralMass;
-            //                                }
-            //                            }
-            //                            else if (peak3 != null)
-            //                            {
-            //                                peak3NeutralMass = Mass.MassFromMz(peak3.X, charge);
-            //                                if (peak4 != null)
-            //                                {
-            //                                    peak4NeutralMass = Mass.MassFromMz(peak4.X, charge);
-            //                                    spacing1 = peak4NeutralMass - peak3NeutralMass;
-            //                                }
-            //                                else if (peak1 != null)
-            //                                {
-            //                                    peak1NeutralMass = Mass.MassFromMz(peak1.X, charge);
-            //                                    spacing1 = (peak3NeutralMass - peak1NeutralMass) / 2.0;
-            //                                }
-            //                                else
-            //                                {
-            //                                    peak2NeutralMass = Mass.MassFromMz(peak2.X, charge);
-            //                                    spacing1 = peak3NeutralMass - peak2NeutralMass;
-            //                                }
-            //                            }
-            //                            else
-            //                            {
-            //                                peak4NeutralMass = Mass.MassFromMz(peak4.X, charge);
-            //                                if (peak1 != null)
-            //                                {
-            //                                    peak1NeutralMass = Mass.MassFromMz(peak1.X, charge);
-            //                                    spacing1 = (peak4NeutralMass - peak1NeutralMass) / 3.0;
-            //                                }
-            //                                else if (peak2 != null)
-            //                                {
-            //                                    peak2NeutralMass = Mass.MassFromMz(peak2.X, charge);
-            //                                    spacing1 = (peak4NeutralMass - peak2NeutralMass) / 2.0;
-            //                                }
-            //                                else
-            //                                {
-            //                                    peak3NeutralMass = Mass.MassFromMz(peak3.X, charge);
-            //                                    spacing1 = peak4NeutralMass - peak3NeutralMass;
-            //                                }
-            //                            }
-            //                            if (spacing1 > spacingMassRange.Maximum || spacing1 < spacingMassRange.Minimum)
-            //                            {
-            //                                pair.peaks[channelIndex, j] = null;
-            //                                pair.peaks[channelIndex + 1, j] = null;
-            //                                pair.peaks[channelIndex + 2, j] = null;
-            //                                pair.peaks[channelIndex + 3, j] = null;
-            //                            }
-            //                        }
-            //                        else
-            //                        {
-            //                            pair.peaks[channelIndex, j] = null;
-            //                            pair.peaks[channelIndex + 1, j] = null;
-            //                            pair.peaks[channelIndex + 2, j] = null;
-            //                            pair.peaks[channelIndex + 3, j] = null;
-            //                        }
-            //                    }
-            //                    else // For 0 or 1 peaks, no further action needed
-            //                    {
-            //                        pair.peaks[channelIndex, j] = null;
-            //                        pair.peaks[channelIndex + 1, j] = null;
-            //                        pair.peaks[channelIndex + 2, j] = null;
-            //                        pair.peaks[channelIndex + 3, j] = null;
-            //                    }
-                    //        } // End isotopologue loop
-                    //    } // End isotope loop
-                    //} // End cluster loop
-                //}
-            //}
         }
 
         /* To missing channels of pairs that are not coalesced, an noise-based intensity is added to permit quantification
@@ -3354,7 +5336,7 @@ namespace Coon.NeuQuant
                                 // If not found, add pair
                                 if (!found)
                                 {
-                                    Pair noNBCPair = new Pair(this, rawFile, pair.scanNumber);
+                                    Pair noNBCPair = new Pair(this, rawFile, pair.scanNumber, pair.injectionTime);
                                     for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
                                     {
                                         noNBCPair.peaks[m, j] = pair.peaks[m, j];
@@ -3364,7 +5346,7 @@ namespace Coon.NeuQuant
                             }
                         }
                         // For incomplete pairs
-                        else
+                        else if (pair.peakCount[c,j] >= peaksNeeded)
                         {
                             // Check for coalescence
                             if (coalescenceDetected && pair.maxIntensity[c, j] > coalescenceIntensity)
@@ -3424,7 +5406,21 @@ namespace Coon.NeuQuant
                     }
                     scanCount++;
                 }
-
+                precursorScan = rawFile[correctScan];
+            }
+            else if (Form1.AGCBINNING)
+            {
+                bool stop = false;
+                int scanCount = scanNumber - 1;
+                while (scanCount < rawFile.LastSpectrumNumber && !stop)
+                {
+                    if (rawFile.GetMsScan(scanCount).MsnOrder == 2 && ((MsnDataScan)rawFile.GetMsScan(scanCount)).DissociationType == DissociationType.HCD)
+                    {
+                        correctScan = scanCount;
+                        stop = true;
+                    }
+                    scanCount--;
+                }
                 precursorScan = rawFile[correctScan];
             }
             else
@@ -3440,12 +5436,10 @@ namespace Coon.NeuQuant
                     }
                     scanCount--;
                 }
-
                 precursorScan = rawFile[correctScan];
             }
                 
             // Then find all possible precursor monoisotope peaks 
-
             if (numIsotopologues > 1)
             {
                 double[] theo;
@@ -3623,14 +5617,14 @@ namespace Coon.NeuQuant
 
         public bool GetTheoreticalResolvability(int cluster)
         {
-            if (!Form1.NEUCODE)
-            {
-                return true;
-            }
+            if (numLabels == 0) return false;
+
+            else if (!Form1.NEUCODE) return true;
+
             else
             {
                 int charge = bestPSM.Charge;
-                double experimentalSeparation = (numLabels * spacingMassRange[0].Mean) / (double)charge;
+                double experimentalSeparation = (spacingMassRange[0].Mean) / (double)charge;
                 int clusterIndex = cluster * numIsotopologues;
                 double coefficient = (Math.Sqrt(2 * Math.Log(100.0 / QUANTSEPARATION))) / (Math.Sqrt(2 * Math.Log(2)));
                 double theoreticalSeparation = coefficient * ((Mass.MzFromMass(theoMasses[clusterIndex, 0], charge) / (QUANTRESOLUTION * Math.Sqrt(400 / Mass.MzFromMass(theoMasses[clusterIndex, 0], charge)))));
@@ -3668,7 +5662,7 @@ namespace Coon.NeuQuant
                                 pairTotalCount++;
                             }
                             // Pairs with fewer than half the total number of isotopologues
-                            else if (pair.peakCount[c, j] < (numIsotopologues / 2))
+                            else if (Form1.NOISEBANDCAP && pair.peakCount[c, j] < peaksNeeded)
                             {
                                 // Do nothing
                             }
@@ -3775,6 +5769,7 @@ namespace Coon.NeuQuant
             bool addIntensities = true;
             double[,] max;
             int channelIndex;
+            int count;
 
             // Should not have any null peaks in the pair at this point
             if (pair.peakCount[cluster, isotope] != numIsotopologues)
@@ -3787,6 +5782,7 @@ namespace Coon.NeuQuant
             {
                 max = maxCompleteIntensity;
                 channelIndex = cluster * numIsotopologues;
+                count = 0;
                 for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
                 {
                     double intensityThreshold = INTENSITYCUTOFF * max[i, 0];
@@ -3998,64 +5994,127 @@ namespace Coon.NeuQuant
             }
             else
             {
-                for (int c = 0; c < numClusters; c++)
+                if (!Form1.NEUCODE)
                 {
-                    int channelIndex = c * numIsotopologues;
-
-                    if (final[c, 1] >= minimumPostQFPairs) //&& ((double)countNoNBCIsotopes[c] / (double)countAllIsotopes[c]) > 0.25)
+                    if (final[0, 1] >= minimumPostQFPairs)
                     {
-                        finalQuantified[c] = final[c, 1];
-                        // Use only complete pairs for quantification
-                        for (int i = channelIndex ; i < channelIndex + numIsotopologues; i++)
+                        finalQuantified[0] = final[0, 1];
+                        quantifiedNoiseIncluded[0] = false;
+                        
+                        for (int i = 1; i < numChannels; i++)
                         {
-                            int index1 = i;
-                            int index2 = i + 1;
-                            // Use only complete pairs for quantification
-                            for (int n = index2; n < channelIndex + numIsotopologues; n++)
+                            if (Form1.NOISEBANDCAP)
                             {
-                                lightInt = completeTotalIntensity[index1, numIsotopes];
-                                heavyInt = completeTotalIntensity[index2, numIsotopes];
-                                finalQuantified[c] = final[c, 1];
-                                if (lightInt > 0 && heavyInt > 0)
-                                {
-                                    heavyToLightRatioSum[n - 1, 0] = heavyInt / lightInt;
-                                    quantifiedNoiseIncluded[c] = false;
-                                }
-                                index2++;
+                                totalIntensity = completeTotalIntensity;
                             }
-                        }
-                    }
-                    else if (final[c, 0] >= minimumPostQFPairs)
-                    {
-                        int index1 = c * numIsotopologues;
-                        int index2 = (c * numIsotopologues) + 1;
-                        // Use all pairs (complete & incomplete) for quantification
-                        for (int i = channelIndex + 1; i < channelIndex + numIsotopologues; i++)
-                        {
-                            lightInt = totalIntensity[index1, numIsotopes];
-                            heavyInt = totalIntensity[index2, numIsotopes];
-                            finalQuantified[c] = final[c, 0];
+                            // Use only complete pairs for quantification
+                            int index1 = 0;
+                            int index2 = i;
+
+                            lightInt = completeTotalIntensity[index1, numIsotopes];
+                            heavyInt = completeTotalIntensity[index2, numIsotopes];
+
                             if (lightInt > 0 && heavyInt > 0)
                             {
                                 heavyToLightRatioSum[i - 1, 0] = heavyInt / lightInt;
-                                quantifiedNoiseIncluded[c] = true;
                             }
-                            //else if (Form1.NEUCODE_ARG_PROLINECONVERSION && lightInt > 0 && heavyInt == 0)
-                            //{
-                            //    heavyToLightRatioSum[i - 1, 0] = 0;
-                            //    quantifiedNoiseIncluded[c] = true;
-                            //}
-                            //index2++;
                         }
                     }
-                    else
-                    {
-                        // Not able to quantify
-                        for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+                        else if (final[0, 0] >= minimumPostQFPairs)
                         {
-                            //heavyToLightRatioSum[i - 1, 0] = double.NaN;
-                            completeTotalIntensity[i, numIsotopes] = 0;
-                            totalIntensity[i, numIsotopes] = 0;
+                            finalQuantified[0] = final[0, 0];
+                            quantifiedNoiseIncluded[0] = true;
+
+                            for (int i = 1; i < numChannels; i++)
+                            {
+                                int index1 = 0;
+                                int index2 = i;
+
+                                lightInt = totalIntensity[index1, numIsotopes];
+                                heavyInt = totalIntensity[index2, numIsotopes];
+
+                                if (lightInt > 0 && heavyInt > 0)
+                                {
+                                    heavyToLightRatioSum[i - 1, 0] = heavyInt / lightInt;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // Not able to quantify
+                            for (int i = 0; i < numChannels; i++)
+                            {
+                                completeTotalIntensity[i, numIsotopes] = 0;
+                                totalIntensity[i, numIsotopes] = 0;
+                            }
+                        }
+                    }
+                else
+                {
+                    for (int c = 0; c < numClusters; c++)
+                    {
+                        int channelIndex = c * numIsotopologues;
+
+                        if (final[c, 1] >= minimumPostQFPairs)
+                        {
+                            finalQuantified[c] = final[c, 1];
+                            quantifiedNoiseIncluded[c] = false;
+
+                            if (Form1.NOISEBANDCAP)
+                            {
+                                totalIntensity = completeTotalIntensity;
+                            }
+                            // Use only complete pairs for quantification
+                            for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+                            {
+                                int index1 = channelIndex;
+                                int index2 = i + 1;
+                                // Use only complete pairs for quantification
+                                for (int n = index2; n < channelIndex + numIsotopologues; n++)
+                                {
+                                    lightInt = completeTotalIntensity[index1, numIsotopes];
+                                    heavyInt = completeTotalIntensity[index2, numIsotopes];
+
+                                    if (lightInt > 0 && heavyInt > 0)
+                                    {
+                                        heavyToLightRatioSum[n - (c + 1), 0] = heavyInt / lightInt;
+                                    }
+                                    index2++;
+                                }
+                            }
+                        }
+                        else if (final[c, 0] >= minimumPostQFPairs)
+                        {
+                            finalQuantified[c] = final[c, 0];
+                            quantifiedNoiseIncluded[c] = true;
+
+                            for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+                            {
+                                int index1 = channelIndex;
+                                int index2 = i + 1;
+                                // Use only complete pairs for quantification
+                                for (int n = index2; n < channelIndex + numIsotopologues; n++)
+                                {
+                                    lightInt = totalIntensity[index1, numIsotopes];
+                                    heavyInt = totalIntensity[index2, numIsotopes];
+
+                                    if (lightInt > 0 && heavyInt > 0)
+                                    {
+                                        heavyToLightRatioSum[n - (c + 1), 0] = heavyInt / lightInt;
+                                    }
+                                    index2++;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // Not able to quantify
+                            for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+                            {
+                                //heavyToLightRatioSum[i - 1, 0] = double.NaN;
+                                completeTotalIntensity[i, numIsotopes] = 0;
+                                totalIntensity[i, numIsotopes] = 0;
+                            }
                         }
                     }
                 }

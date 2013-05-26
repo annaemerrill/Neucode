@@ -166,13 +166,14 @@ namespace Coon.NeuQuant
         public double injectionTime { get; set; }
 
         // Creates a pair associated with a given peptide and scan number within a raw file
-        public Pair(PeptideID parent, MSDataFile rawFile, int scanNumber)
+        public Pair(PeptideID parent, MSDataFile rawFile, int scanNumber, double injectionTime)
         {
             this.parent = parent;
             this.scanNumber = scanNumber;
             this.rawFile = rawFile;
             peaks = new ILabeledPeak[parent.numChannels, parent.numIsotopes];
             charge = parent.bestPSMs[rawFile].Charge;
+            this.injectionTime = injectionTime;
         }
         
         public bool checkCoalescence(int Isotope, int ScanNumber, int Channel)

@@ -27,6 +27,7 @@ namespace Coon.NeuQuant
         public static double SYSTEMATICERROR;
         public static bool FIRSTSEARCHDONE;
         public static Dictionary<string, MSDataFile> RAWFILES;
+        public static Dictionary<string, Dictionary<int, Dictionary<Range<double>, double>>> INJECTIONTIMES;
         public static double MAXIMUMDNL;
         public static double THEORETICALSEPARATION;
         public static double QUANTRESOLUTION;
@@ -43,12 +44,14 @@ namespace Coon.NeuQuant
         public static bool AGCBINNING;
         //public static bool CALCIUM;
         public static bool CHECKPARTIALINCORPORATION;
+        public static bool SEGMENTEDINJECTIONTIMES;
         //public static Dictionary<int, List<double>> PEAKSNPAIRS;
         //public static int QUANTCOUNT;
         
         // Experiment types
         public static bool NEUCODE;
         public static bool TRADITIONAL;
+        public static bool ICAT;
         public static bool NEUCODE_DUPLEX_LYS8_36MDA;
         public static bool NEUCODE_DUPLEX_LEU7_18MDA;
         public static bool NEUCODE_TRIPLEX_LYS8_18MDA;
@@ -78,15 +81,13 @@ namespace Coon.NeuQuant
         {
 
             InitializeComponent();
-            rawFileBox.Text = @"E:\Desktop\NeuCode Lysine\Raw Files\6-plex";
-            csvInputBox.Text = @"E:\Desktop\NeuCode Lysine\FDR\6-plex\target-decoy\09may2013_480K_6plex_1to2to5to5to2to1_ITMS_CID_target.csv";
-            outputFolderBox.Text = @"E:\Desktop\NeuCode Lysine\Output\6-plex";
-            signalToNoiseThreshold.Value = 3;
-            noiseBandCap.Checked = false;
-            coalescence.Checked = false;
+            rawFileBox.Text = @"Z:\Common Data\projects\6Plex_SILAC_Yeast";
+            listBox1.Items.Add(@"Z:\Common Data\projects\6Plex_SILAC_Yeast\09may2013_960K_6plex_1to1to1to1to1to1_300to800_AGCBinning_ITMS_CID_target.csv");          
+            outputFolderBox.Text = @"E:\Desktop\NeuCode vs. TMT 4-plex\QUANT";
+            //csvInputBox.Text = @"E:\Desktop\NeuCode vs. TMT 4-plex\FDR\target-decoy\AEM_ITMS_CID_target.csv";
         }
 
-        private void Run()
+        private void Run(string file)
         {
             RTWINDOW = (double) rtWindow.Value;
             NUMISOTOPES = (int)Isotopes.Value;
@@ -94,13 +95,17 @@ namespace Coon.NeuQuant
             THEORETICALSEPARATION = (double)PeakSeparation.Value;
             QUANTRESOLUTION = (double)QuantResolution.Value;
             CHECKPAIRSPACING = true;
+            QUANTFILTER = true;
             NOISEBANDCAP = noiseBandCap.Checked;
             PEAKCOALESCENCE = coalescence.Checked;
-            QUANTFILTER = filterProfiles.Checked;
-            MULTIINJECT = false;
-            AGCBINNING = false;
-            //CALCIUM = false;
-            //PEAKSNPAIRS = new Dictionary<int, List<double>>();
+            MULTIINJECT = MultipleInjections.Checked;
+            AGCBINNING = AGCBins.Checked;
+
+            Dictionary<string, PeptideID> allPeptides = new Dictionary<string, PeptideID>();
+            List<PrecursorPPM> PRECURSORPPM = new List<PrecursorPPM>();
+            RAWFILES = new Dictionary<string, MSDataFile>();
+            List<CoalescenceCheck> INTENSITY_MISSINGCHANNEL = new List<CoalescenceCheck>();
+            List<Spacing> spacings = new List<Spacing>();
 
             NEUCODE_DUPLEX_LYS8_36MDA = NeuCodeLys8Duplex.Checked && !mTRAQ.Checked && !Arg.Checked && !Leu.Checked;
             NEUCODE_DUPLEX_LEU7_18MDA = NeuCodeLeu7Duplex.Checked;
@@ -123,6 +128,202 @@ namespace Coon.NeuQuant
             NEUCODE_4PLEX_HEAVY = FourplexH.Checked;
             NEUCODE_4PLEX_MEDIUM = FourplexM.Checked;
             NEUCODE_4PLEX_LIGHT = FourplexL.Checked;
+            ICAT = Icat.Checked;
+
+            setExperimentConfiguration();
+
+            WriteMessage("starting");
+
+            // Cycle through .csv files to make a list of identified peptides and properties
+            readCsvInputFile(allPeptides, file);   
+      
+            int rawFileCount = 0;
+            int totalRawFiles = RAWFILES.Count;
+            int THEORETICALLYRESOLVABLE = 0;
+            int CONTAINSLABEL = 0;
+
+            WriteMessage("calculating systematic error");
+
+            // Calculate systematic error by looking for monoisotopes in MS scan preceding best MS/MS scan
+            foreach (MSDataFile rawFile in RAWFILES.Values)
+            {
+                rawFileCount++;
+                rawFile.Open();
+                WriteMessage("calculating ppm error in raw file " + rawFileCount + " of " + totalRawFiles);
+                
+                foreach (PeptideID peptide in allPeptides.Values)
+                {
+                    if (peptide.numLabels > 0)
+                    {
+                        CONTAINSLABEL++;
+                        if (peptide.theoreticallyResolvable)
+                        {
+                            THEORETICALLYRESOLVABLE++;
+                            List<PeptideSpectralMatch> psms = null;
+                            if (peptide.PSMs.TryGetValue(rawFile, out psms))
+                            {
+                                peptide.precursorPPMError(rawFile, PRECURSORPPM);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            PRECURSORPPM.Sort();
+            //writePrecursorPPMOutput(PRECURSORPPM);
+            
+            SYSTEMATICERROR = PRECURSORPPM.ElementAt(PRECURSORPPM.Count / 2).Ppm; //Set systematic error as the median value of precursors
+            WriteMessage("labeled peptides: " + CONTAINSLABEL);
+            WriteMessage("theoretically resolvable peptides: " + THEORETICALLYRESOLVABLE);
+            WriteMessage("peptides found: " + (PRECURSORPPM.Count / (double)NUMISOTOPOLOGUES));
+            WriteMessage("systematic error: " + SYSTEMATICERROR);
+            PRECURSORPPM.Clear();
+
+            WriteMessage("applying systematic error");
+            FIRSTSEARCHDONE = true;
+
+            WriteMessage("searching RAW file for pairs");
+            rawFileCount = 0;
+
+            foreach (MSDataFile rawFile in RAWFILES.Values)
+            {
+                rawFileCount++;
+                rawFile.Open();
+                WriteMessage("finding pairs in raw file " + rawFileCount + " of " + totalRawFiles);
+
+                foreach (PeptideID uniquePeptide in allPeptides.Values)
+                {
+                    // Only consider peptides that contain at least one label
+                    if (uniquePeptide.numLabels > 0 && uniquePeptide.theoreticallyResolvable)
+                    {
+                        // Only consider peptides that were identified in this raw file
+                        List<PeptideSpectralMatch> psms = null;
+                        if (uniquePeptide.PSMs.TryGetValue(rawFile, out psms))
+                        {
+                            uniquePeptide.calculateScanRange(rawFile, RTWINDOW);
+                            foreach (MSDataScan currentScan in uniquePeptide.fullScanList)
+                            {                               
+                                uniquePeptide.findPeaks(currentScan, rawFile);
+                                uniquePeptide.checkPairSpacing(rawFile, spacings);
+                            }
+                        }
+                    }
+                }
+            }
+
+            //writeSpacingOutput(spacings);
+            
+            if (NOISEBANDCAP && PEAKCOALESCENCE)
+            {
+                WriteMessage("calculating coalescence threshold");
+                MAXIMUMDNL = calculateCoalescenceThreshold(allPeptides, 0.1, INTENSITY_MISSINGCHANNEL);
+                WriteMessage("intensity threshold: " + MAXIMUMDNL);
+            }
+
+            // Validate NeuCode pairs in which one channel was found to be missing -- apply noise level or discard due to coalescence
+            rawFileCount = 0;
+            foreach (MSDataFile rawFile in RAWFILES.Values)
+            {
+                rawFileCount++;
+                rawFile.Open();
+                WriteMessage("quantifying pairs in raw file " + rawFileCount + " of " + totalRawFiles);
+
+                foreach (PeptideID uniquePeptide in allPeptides.Values)
+                {
+                    if (uniquePeptide.numLabels > 0 && uniquePeptide.theoreticallyResolvable)
+                    {
+                        List<PeptideSpectralMatch> psms = null;
+                        if (uniquePeptide.PSMs.TryGetValue(rawFile, out psms))
+                        {
+                            if (PEAKCOALESCENCE)
+                            {                                
+                                uniquePeptide.checkPairCoalescence(rawFile);
+                            }
+
+                            if (NOISEBANDCAP)
+                            {                                
+                                uniquePeptide.applyNoise(rawFile);
+                            }
+                        }
+                    }
+                }
+            }
+
+            foreach (PeptideID uniquePeptide in allPeptides.Values)
+            {
+                if (uniquePeptide.numLabels > 0 && uniquePeptide.theoreticallyResolvable)
+                {
+                    uniquePeptide.quantify();
+                }
+                else
+                {
+                    uniquePeptide.finalQuantified = new int[NUMCLUSTERS];
+                    uniquePeptide.quantifiedNoiseIncluded = new bool[NUMCLUSTERS];
+                    
+                    for (int c = 0; c < NUMCLUSTERS; c++)
+                    {
+                        uniquePeptide.finalQuantified[c] = 0;
+                        uniquePeptide.quantifiedNoiseIncluded[c] = false;
+                    }
+                }
+            }
+
+            WriteMessage("writing output file");
+            writeCsvOutputFile(allPeptides, file);
+            WriteMessage("finished");
+        }
+
+        public void WriteMessage(string message)
+        {
+            Console.WriteLine(message);
+            richTextBox1.AppendText(message + "\n");
+            richTextBox1.ScrollToCaret();
+            Application.DoEvents();
+        }
+
+        private void writeSpacingOutput(List<Spacing> spacings, string file)
+        {
+            // Pair spacing outputs can be printed out to a file to assess spacing distributions
+            StreamWriter spacingWriter = new StreamWriter(Path.Combine(outputFolderBox.Text, Path.GetFileNameWithoutExtension(file) + "_spacings.csv"));
+            string header1 = ("Theo Spacing, Exp Spacing, Charge, MZ");
+            spacingWriter.WriteLine(header1);
+            WriteMessage("writing output");
+
+            foreach (Spacing spacing in spacings)
+            {
+                spacingWriter.WriteLine("{0},{1},{2},{3}", spacing.theoSpacing, spacing.spacing, spacing.charge, spacing.MZ);
+            }
+
+            spacingWriter.Close();
+        }
+        
+        private void writePrecursorPPMOutput(List<PrecursorPPM> PRECURSORPPM, string file)
+        {
+            // PPM error outputs can be printed out to a file to assess error distributions
+            StreamWriter ppmWriter = new StreamWriter(Path.Combine(outputFolderBox.Text, Path.GetFileNameWithoutExtension(file) + "_ppm.csv"));
+            string header = ("Peptide, Charge, PPM Error, E-value");
+            ppmWriter.WriteLine(header);
+            WriteMessage("writing output");
+
+            foreach (PrecursorPPM ppm in PRECURSORPPM)
+            {
+                ppmWriter.WriteLine("{0},{1},{2},{3}", ppm.Peptide, ppm.Charge, ppm.Ppm, ppm.EValue);
+            }
+
+            ppmWriter.Close();
+        }
+        
+        private void setExperimentConfiguration()
+        {
+            // 2-plex ICAT
+            if (ICAT)
+            {
+                NEUCODE = false;
+                TRADITIONAL = true;
+                NUMCHANNELS = 2;
+                NUMCLUSTERS = 2;
+                NUMISOTOPOLOGUES = 1;
+            }
 
             // 2-plex SILAC
             if (SILAC_DUPLEX_LYSCN || SILAC_DUPLEX_LYSH || SILAC_DUPLEX_LEUCN || SILAC_DUPLEX_LEUH)
@@ -200,8 +401,14 @@ namespace Coon.NeuQuant
                 {
                     NUMCLUSTERS = 1;
                     NUMISOTOPOLOGUES = 6;
+
+                    if (AGCBINNING)
+                    {
+                        SEGMENTEDINJECTIONTIMES = true;
+                        INJECTIONTIMES = new Dictionary<string, Dictionary<int, Dictionary<Range<double>, double>>>();
+                    }
                 }
-            }     
+            }
 
             // 9-plex NeuCode
             if (NEUCODE_9PLEX_MTRAQ)
@@ -228,207 +435,22 @@ namespace Coon.NeuQuant
             {
                 NEUCODE = true;
                 TRADITIONAL = false;
-                NUMCHANNELS = 12;
+                NUMCHANNELS = 18;
                 NUMCLUSTERS = 3;
-                NUMISOTOPOLOGUES = 4;
+                NUMISOTOPOLOGUES = 6;
             }
-
-            Console.WriteLine("starting");
-
-            // Cycle through .csv files to make a list of identified peptides and properties
-            Dictionary<string, PeptideID> allPeptides = new Dictionary<string, PeptideID>();
-            List<PrecursorPPM> PRECURSORPPM = new List<PrecursorPPM>();
-            RAWFILES = new Dictionary<string, MSDataFile>();
-            List<CoalescenceCheck> INTENSITY_MISSINGCHANNEL = new List<CoalescenceCheck>();
-            List<Spacing> spacings = new List<Spacing>();
-            readCsvInputFile(allPeptides);         
-            MSDataScan currentFullScan;
-            int rawFileCount = 0;
-            int totalRawFiles = RAWFILES.Count;
-            int THEORETICALLYRESOLVABLE = 0;
-            int CONTAINSLABEL = 0;
-
-            Console.WriteLine("calculating systematic error");
-
-            // Calculate systematic error by looking for monoisotopes in MS scan preceding best MS/MS scan
-            foreach (MSDataFile rawFile in RAWFILES.Values)
-            {
-                rawFileCount++;
-                rawFile.Open();
-                Console.WriteLine("calculating ppm error in raw file " + rawFileCount + " of " + totalRawFiles);
-                
-                foreach (PeptideID peptide in allPeptides.Values)
-                {
-                    if (peptide.numLabels > 0)
-                    {
-                        CONTAINSLABEL++;
-                        if (peptide.theoreticallyResolvable)
-                        {
-                            THEORETICALLYRESOLVABLE++;
-                            List<PeptideSpectralMatch> psms = null;
-                            if (peptide.PSMs.TryGetValue(rawFile, out psms))
-                            {
-                                peptide.precursorPPMError(rawFile, PRECURSORPPM);
-                            }
-                        }
-                    }
-                }
-            }
-            
-            PRECURSORPPM.Sort();
-            
-            // PPM error outputs can be printed out to a file to assess error distributions
-            /*StreamWriter ppmWriter = new StreamWriter(Path.Combine(outputFolderBox.Text, Path.GetFileNameWithoutExtension(csvInputBox.Text) + "_ppm.csv"));
-            string header = ("Peptide, Charge, PPM Error, E-value");
-            ppmWriter.WriteLine(header);
-            Console.WriteLine("writing output");
-
-            foreach (PrecursorPPM ppm in PRECURSORPPM)
-            {
-                ppmWriter.WriteLine("{0},{1},{2},{3}", ppm.Peptide, ppm.Charge, ppm.Ppm, ppm.EValue);
-            }
-
-            ppmWriter.Close();*/
-
-            SYSTEMATICERROR = PRECURSORPPM.ElementAt(PRECURSORPPM.Count / 2).Ppm; //Set systematic error as the median value of all light and heavy precursors
-
-            Console.WriteLine("labeled peptides: " + CONTAINSLABEL);
-            Console.WriteLine("theoretically resolvable peptides: " + THEORETICALLYRESOLVABLE);
-            Console.WriteLine("peptides found: " + (PRECURSORPPM.Count / (double)NUMISOTOPOLOGUES));
-            Console.WriteLine("systematic error: " + SYSTEMATICERROR);
-            PRECURSORPPM.Clear();
-
-            Console.WriteLine("applying systematic error");
-            FIRSTSEARCHDONE = true;
-
-            Console.WriteLine("searching RAW file for pairs");
-            rawFileCount = 0;
-            foreach (MSDataFile rawFile in RAWFILES.Values)
-            {
-                rawFileCount++;
-                rawFile.Open();
-                Console.WriteLine("finding pairs in raw file " + rawFileCount + " of " + totalRawFiles);
-
-                foreach (PeptideID uniquePeptide in allPeptides.Values)
-                {
-                    // Only consider peptides that contain at least one label
-                    if (uniquePeptide.numLabels > 0 && uniquePeptide.theoreticallyResolvable)
-                    {
-                        // Only consider peptides that were identified in this raw file
-                        List<PeptideSpectralMatch> psms = null;
-                        if (uniquePeptide.PSMs.TryGetValue(rawFile, out psms))
-                        {
-                            uniquePeptide.calculateScanRange(rawFile, RTWINDOW);
-                            foreach (MSDataScan currentScan in uniquePeptide.fullScanList)
-                            {
-                                uniquePeptide.findPeaks(currentScan, rawFile);
-                            }
-                            if (CHECKPAIRSPACING)
-                            {
-                                uniquePeptide.checkPairSpacing(rawFile, spacings);
-                            }
-                        }
-                    }
-                }
-                //rawFile.Close();
-            }
-
-            // Pair spacing outputs can be printed out to a file to assess spacing distributions
-            /*StreamWriter spacingWriter = new StreamWriter(Path.Combine(outputFolderBox.Text, Path.GetFileNameWithoutExtension(csvInputBox.Text) + "_spacings.csv"));
-            string header1 = ("Theo Spacing, Exp Spacing, Charge, MZ");
-            spacingWriter.WriteLine(header1);
-            Console.WriteLine("writing output");
-
-            foreach (Spacing spacing in spacings)
-            {
-                spacingWriter.WriteLine("{0},{1},{2},{3}", spacing.theoSpacing, spacing.spacing, spacing.charge, spacing.MZ);
-            }
-
-            spacingWriter.Close();*/
-
-            // Coalescence outputs can be printed out to a file to assess the impact of precursor signal-to-noise on observed coalescence
-            /*StreamWriter coal = new StreamWriter(Path.Combine(outputFolderBox.Text, Path.GetFileNameWithoutExtension(csvInputBox.Text) + "_coalescence.csv"));
-            string header1 = ("# Peaks, S/N");
-            coal.WriteLine(header1);
-            foreach (int numPeaks in PEAKSNPAIRS.Keys)
-            {
-                foreach (double signalNoise in PEAKSNPAIRS[numPeaks])
-                {
-                    coal.WriteLine("{0},{1}", numPeaks, signalNoise);
-                }
-            }
-
-            coal.Close();*/
-            
-            if (NOISEBANDCAP && PEAKCOALESCENCE)
-            {
-                Console.WriteLine("calculating coalescence threshold");
-                MAXIMUMDNL = calculateCoalescenceThreshold(allPeptides, 0.1, INTENSITY_MISSINGCHANNEL);
-                Console.WriteLine("intensity threshold: " + MAXIMUMDNL);
-            }
-
-            // Validate NeuCode pairs in which one channel was found to be missing -- apply noise level or discard due to coalescence
-            rawFileCount = 0;
-            foreach (MSDataFile rawFile in RAWFILES.Values)
-            {
-                rawFileCount++;
-                rawFile.Open();
-                Console.WriteLine("quantifying pairs in raw file " + rawFileCount + " of " + totalRawFiles);
-
-                foreach (PeptideID uniquePeptide in allPeptides.Values)
-                {
-                    if (uniquePeptide.numLabels > 0 && uniquePeptide.theoreticallyResolvable)
-                    {
-                        List<PeptideSpectralMatch> psms = null;
-                        if (uniquePeptide.PSMs.TryGetValue(rawFile, out psms))
-                        {
-                            if (PEAKCOALESCENCE)
-                            {                                
-                                uniquePeptide.checkPairCoalescence(rawFile);
-                            }
-
-                            if (NOISEBANDCAP)
-                            {                                
-                                uniquePeptide.applyNoise(rawFile);
-                            }
-                        }
-                    }
-                }
-            }
-
-            foreach (PeptideID uniquePeptide in allPeptides.Values)
-            {
-                if (uniquePeptide.numLabels > 0 && uniquePeptide.theoreticallyResolvable)
-                {
-                    uniquePeptide.quantify();
-                }
-                else
-                {
-                    uniquePeptide.finalQuantified = new int[NUMCLUSTERS];
-                    uniquePeptide.quantifiedNoiseIncluded = new bool[NUMCLUSTERS];
-                    
-                    for (int c = 0; c < NUMCLUSTERS; c++)
-                    {
-                        uniquePeptide.finalQuantified[c] = 0;
-                        uniquePeptide.quantifiedNoiseIncluded[c] = false;
-                    }
-                }
-            }
-
-            Console.WriteLine("writing output file");
-            writeCsvOutputFile(allPeptides);
         }
-
-        private void writeCsvOutputFile(Dictionary<string, PeptideID> allPeptides)
+        
+        private void writeCsvOutputFile(Dictionary<string, PeptideID> allPeptides, string file)
         {
             string outputName;
             if (NEUCODE)
             {
-                outputName = Path.Combine(outputFolderBox.Text, Path.GetFileNameWithoutExtension(csvInputBox.Text) + "_NeuCode_Quant.csv");
+                outputName = Path.Combine(outputFolderBox.Text, Path.GetFileNameWithoutExtension(file) + "_NeuCode_Quant.csv");
             }
             else
             {
-                outputName = Path.Combine(outputFolderBox.Text, Path.GetFileNameWithoutExtension(csvInputBox.Text) + "_SILAC_Quant.csv");
+                outputName = Path.Combine(outputFolderBox.Text, Path.GetFileNameWithoutExtension(file) + "_SILAC_Quant.csv");
             }
             StreamWriter writer1 = new StreamWriter(outputName);
 
@@ -782,7 +804,7 @@ namespace Coon.NeuQuant
         /* Reads in peptide information from a CSV file
          * Necessary information: spectrum number, charge, peptide sequence, E-value, raw file
          */
-        private void readCsvInputFile(Dictionary<string, PeptideID> allPeptides)
+        private void readCsvInputFile(Dictionary<string, PeptideID> allPeptides, string file)
         {
             // Amino acids
             NamedChemicalFormula K602 = NamedChemicalFormula.AddModification("C-6 C{13}6 N-2 N{15}2", "Lys +8 13C6 15N2");
@@ -803,24 +825,24 @@ namespace Coon.NeuQuant
             // mTRAQ labels
             NamedChemicalFormula lightmTRAQ = NamedChemicalFormula.AddModification("H{1}12 C{12}7 N{14}2 O{16}1", "mTRAQ L");
             NamedChemicalFormula lightmTRAQK602 = NamedChemicalFormula.AddModification("H{1}12 C{12}7 N{14}2 O{16}1 C-6 C{13}6 N-2 N{15}2", "mTRAQ L Lys +8 13C6 15N2");
-            NamedChemicalFormula lightmTRAQK422 = NamedChemicalFormula.AddModification("H{1}12 C{12}7 N{14}2 O{16}1 C-4 C{13}4 H-4 H{2}4 N-2 N{15}2", "mTRAQ L Lys +8 13C4 2H4 15N2");
+            NamedChemicalFormula lightmTRAQK422 = NamedChemicalFormula.AddModification("H{1}12 C{12}7 N{14}2 O{16}1 C-4 C{13}4 H-4 H{2}4 N-2 N{15}2", "mTRAQ L Lys +8 13C4 2H2 15N2");
             NamedChemicalFormula lightmTRAQK521 = NamedChemicalFormula.AddModification("H{1}12 C{12}7 N{14}2 O{16}1 C-6 C{13}5 H-2 H{2}2 N-1 N{15}1", "mTRAQ L Lys +8 13C5 2H2 15N1");
             NamedChemicalFormula lightmTRAQK062 = NamedChemicalFormula.AddModification("H{1}12 C{12}7 N{14}2 O{16}1 H-6 H{2}6 N-2 N{15}2", "mTRAQ L Lys +8 2H6 15N2");
             NamedChemicalFormula lightmTRAQK440 = NamedChemicalFormula.AddModification("H{1}12 C{12}7 N{14}2 O{16}1 C-4 C{13}4 H-4 H{2}4", "mTRAQ L Lys +8 13C4 2H4");
             NamedChemicalFormula lightmTRAQK080 = NamedChemicalFormula.AddModification("H{1}12 C{12}7 N{14}2 O{16}1 H-8 H{2}8", "mTRAQ L Lys +8 2H8");
             NamedChemicalFormula mediummTRAQ = NamedChemicalFormula.AddModification("H{1}12 C{12}4 C{13}3 N{14}1 N{15}1 O{16}1", "mTRAQ M");
             NamedChemicalFormula mediummTRAQ602 = NamedChemicalFormula.AddModification("H{1}12 C{12}4 C{13}3 N{14}1 N{15}1 O{16}1 C-6 C{13}6 N-2 N{15}2", "mTRAQ M Lys +8 13C6 15N2");
-            NamedChemicalFormula mediummTRAQK422 = NamedChemicalFormula.AddModification("H{1}12 C{12}4 C{13}3 N{14}1 N{15}1 O{16}1 C-4 C{13}4 H-4 H{2}4 N-2 N{15}2", "mTRAQ M Lys +8 13C4 2H4 15N2");
+            NamedChemicalFormula mediummTRAQK422 = NamedChemicalFormula.AddModification("H{1}12 C{12}4 C{13}3 N{14}1 N{15}1 O{16}1 C-4 C{13}4 H-4 H{2}4 N-2 N{15}2", "mTRAQ M Lys +8 13C4 2H2 15N2");
             NamedChemicalFormula mediummTRAQK521 = NamedChemicalFormula.AddModification("H{1}12 C{12}4 C{13}3 N{14}1 N{15}1 O{16}1 C-6 C{13}5 H-2 H{2}2 N-1 N{15}1", "mTRAQ M Lys +8 13C5 2H2 15N1");
             NamedChemicalFormula mediummTRAQK062 = NamedChemicalFormula.AddModification("H{1}12 C{12}4 C{13}3 N{14}1 N{15}1 O{16}1 H-6 H{2}6 N-2 N{15}2", "mTRAQ M Lys +8 2H6 15N2");
             NamedChemicalFormula mediummTRAQK440 = NamedChemicalFormula.AddModification("H{1}12 C{12}4 C{13}3 N{14}1 N{15}1 O{16}1 C-4 C{13}4 H-4 H{2}4", "mTRAQ M Lys +8 13C4 2H4");
             NamedChemicalFormula mediummTRAQK080 = NamedChemicalFormula.AddModification("H{1}12 C{12}4 C{13}3 N{14}1 N{15}1 O{16}1 H-8 H{2}8", "mTRAQ M Lys +8 2H8");
             NamedChemicalFormula heavymTRAQ = NamedChemicalFormula.AddModification("H{1}12 C{12}1 C{13}6 N{15}2 O{16}1", "mTRAQ H");
             NamedChemicalFormula heavymTRAQK602 = NamedChemicalFormula.AddModification("H{1}12 C{12}1 C{13}6 N{15}2 O{16}1 C-6 C{13}6 N-2 N{15}2", "mTRAQ H Lys +8 13C6 15N2");
-            NamedChemicalFormula heavymTRAQK422 = NamedChemicalFormula.AddModification("H{1}12 C{12}1 C{13}6 N{14}2 N{15}1 O{16}1 C-4 C{13}4 H-4 H{2}4 N-2 N{15}2", "mTRAQ H Lys +8 13C4 2H4 15N2");
-            NamedChemicalFormula heavymTRAQK521 = NamedChemicalFormula.AddModification("H{1}12 C{12}1 C{13}6 N{14}2 N{15}1 O{16}1 C-6 C{13}5 H-2 H{2}2 N-1 N{15}1", "mTRAQ H Lys +8 13C5 2H2 15N1");
-            NamedChemicalFormula heavymTRAQK062 = NamedChemicalFormula.AddModification("H{1}12 C{12}1 C{13}6 N{14}2 N{15}1 O{16}1 H-6 H{2}6 N-2 N{15}2", "mTRAQ H Lys +8 2H6 15N2");
-            NamedChemicalFormula heavymTRAQK440 = NamedChemicalFormula.AddModification("H{1}12 C{12}1 C{13}6 N{14} N{15}1 O{16}1 C-4 C{13}4 H-4 H{2}4", "mTRAQ H Lys +8 13C4 2H4");
+            NamedChemicalFormula heavymTRAQK422 = NamedChemicalFormula.AddModification("H{1}12 C{12}1 C{13}6 N{15}2 O{16}1 C-4 C{13}4 H-4 H{2}4 N-2 N{15}2", "mTRAQ H Lys +8 13C4 2H2 15N2");
+            NamedChemicalFormula heavymTRAQK521 = NamedChemicalFormula.AddModification("H{1}12 C{12}1 C{13}6 N{15}2 O{16}1 C-6 C{13}5 H-2 H{2}2 N-1 N{15}1", "mTRAQ H Lys +8 13C5 2H2 15N1");
+            NamedChemicalFormula heavymTRAQK062 = NamedChemicalFormula.AddModification("H{1}12 C{12}1 C{13}6 N{15}2 O{16}1 H-6 H{2}6 N-2 N{15}2", "mTRAQ H Lys +8 2H6 15N2");
+            NamedChemicalFormula heavymTRAQK440 = NamedChemicalFormula.AddModification("H{1}12 C{12}1 C{13}6 N{15}2 O{16}1 C-4 C{13}4 H-4 H{2}4", "mTRAQ H Lys +8 13C4 2H4");
             NamedChemicalFormula heavymTRAQK080 = NamedChemicalFormula.AddModification("H{1}12 C{12}1 C{13}6 N{15}2 O{16}1 H-8 H{2}8", "mTRAQ H Lys +8 2H8");
             
             // Chemical labels
@@ -833,41 +855,77 @@ namespace Coon.NeuQuant
             NamedChemicalFormula mediumASH3 = NamedChemicalFormula.AddModification("C{12}10 H{1}31 N{14}1 O{16}5 N{15}2 C{13}8", "4plex M3");
             NamedChemicalFormula mediumASH4 = NamedChemicalFormula.AddModification("C{12}8 H{1}31 N{14}1 O{16}5 C{13}10", "4plex M4");
             NamedChemicalFormula heavyASH1 = NamedChemicalFormula.AddModification("C{12}10 H{1}31 N{14}1 O{16}5 N{15}6 C{13}8", "4plex H1");
-            NamedChemicalFormula heavyASH2 = NamedChemicalFormula.AddModification("C{12}8 H{1}31 N{14}1 O{16}5 N{15}4 C{13}10", "4plex H2");
-            NamedChemicalFormula heavyASH3 = NamedChemicalFormula.AddModification("C{12}6 H{1}31 N{14}1 O{16}5 N{15}2 C{13}12", "4plex H3");
-            NamedChemicalFormula heavyASH4 = NamedChemicalFormula.AddModification("C{12}4 H{1}31 N{14}1 O{16}5 C{13}14", "4plex H4");
+            NamedChemicalFormula heavyASH2 = NamedChemicalFormula.AddModification("C{12}8 H{1}31 N{14}3 O{16}5 N{15}4 C{13}10", "4plex H2");
+            NamedChemicalFormula heavyASH3 = NamedChemicalFormula.AddModification("C{12}6 H{1}31 N{14}5 O{16}5 N{15}2 C{13}12", "4plex H3");
+            NamedChemicalFormula heavyASH4 = NamedChemicalFormula.AddModification("C{12}4 H{1}31 N{14}7 O{16}5 C{13}14", "4plex H4");
             NamedChemicalFormula lightCarbamyl = NamedChemicalFormula.AddModification("C{12}1 N{15}1 H{1}2 O{16}1", "Carbamyl L");
             NamedChemicalFormula heavyCarbamyl = NamedChemicalFormula.AddModification("C{13}1 N{14}1 H{1}2 O{16}1", "Carbamyl H");
+            NamedChemicalFormula lightICAT = NamedChemicalFormula.AddModification("C{12}10H{1}15N{14}3O{16}2", "iCAT L");
+            NamedChemicalFormula heavyICAT = NamedChemicalFormula.AddModification("C{13}9C{12}1H{1}15N{14}3O{16}2", "iCAT H");
 
             HashSet<string> rawFiles = new HashSet<string>();
 
             //Cycle through .csv file to make a list of identified peptides and properties
-            CsvReader reader = new CsvReader(new StreamReader(csvInputBox.Text), true);
-            using (reader)
+            CsvReader targetFileReader = new CsvReader(new StreamReader(file), true);
+            CsvReader injectionTimesReader;
+
+            using (targetFileReader)
             {
                 PeptideID newPeptide;
                 MSDataFile rawFile = null;
-                Console.WriteLine("uploading peptide IDs");
-                while (reader.ReadNextRecord())
+                WriteMessage("uploading peptide IDs");
+                while (targetFileReader.ReadNextRecord())
                 {
-                    string basePathName = reader["Filename/id"].Substring(0, reader["Filename/id"].IndexOf("."));
+                    string basePathName = targetFileReader["Filename/id"].Substring(0, targetFileReader["Filename/id"].IndexOf("."));
 
-                    if (RAWFILES.TryGetValue(basePathName, out rawFile))
-                    {
-
-                    }
-                    else
+                    if (!RAWFILES.TryGetValue(basePathName, out rawFile))
                     {
                         rawFile = new ThermoRawFile(Path.Combine(rawFileBox.Text, basePathName + ".raw"));
                         RAWFILES.Add(basePathName, rawFile);
-                    }                  
 
-                    newPeptide = new PeptideID(int.Parse(reader["Spectrum number"]),
-                                int.Parse(reader["Charge"]), double.Parse(reader["E-value"]),
-                                reader["Peptide"], rawFile, reader["Mods"]);
-                    checkAdd(allPeptides, newPeptide, (MSDataFile) rawFile, double.Parse(reader["E-value"]));                 
+                        if (SEGMENTEDINJECTIONTIMES)
+                        {
+                            string injectionTimesFile = (Path.Combine(rawFileBox.Text, basePathName + "_times.csv"));
+                            injectionTimesReader = new CsvReader(new StreamReader(injectionTimesFile), true);
+                            INJECTIONTIMES.Add(basePathName, new Dictionary<int, Dictionary<Range<double>, double>>());
+
+                            int scanNumber;
+                            double firstMass;
+                            double lastMass;
+                            double injectionTime;
+
+                            while (injectionTimesReader.ReadNextRecord())
+                            {
+                                Dictionary<int, Dictionary<Range<double>, double>> scanNumbers = null;
+                                
+                                scanNumber = int.Parse(injectionTimesReader["Scan Number"]);
+                                firstMass = double.Parse(injectionTimesReader["First Mass"]);
+                                lastMass = double.Parse(injectionTimesReader["Last Mass"]);
+                                injectionTime = double.Parse(injectionTimesReader["Time"]);
+
+                                INJECTIONTIMES.TryGetValue(basePathName, out scanNumbers);
+                                Dictionary<Range<double>, double> segmentInjectionTimes = null;
+
+                                if (scanNumbers.TryGetValue(scanNumber, out segmentInjectionTimes))
+                                {
+                                    segmentInjectionTimes.Add(new Range<double>(firstMass, lastMass), injectionTime);
+                                }
+                                else
+                                {
+                                    segmentInjectionTimes = new Dictionary<Range<double>, double>();
+                                    segmentInjectionTimes.Add(new Range<double>(firstMass, lastMass), injectionTime);
+                                    scanNumbers.Add(scanNumber, segmentInjectionTimes);
+                                }
+                            }
+                        }
+                    }
+
+                    newPeptide = new PeptideID(int.Parse(targetFileReader["Spectrum number"]),
+                                int.Parse(targetFileReader["Charge"]), double.Parse(targetFileReader["E-value"]),
+                                targetFileReader["Peptide"], rawFile, targetFileReader["Mods"]);
+                    checkAdd(allPeptides, newPeptide, (MSDataFile)rawFile, double.Parse(targetFileReader["E-value"]));                 
                 }
-                Console.WriteLine("done uploading peptide IDs: " + allPeptides.Count + " total unique sequences");
+                WriteMessage("done uploading peptide IDs: " + allPeptides.Count + " total unique sequences");
             }
         }
 
@@ -922,15 +980,15 @@ namespace Coon.NeuQuant
             /*StreamWriter coalWriter = new StreamWriter(Path.Combine(outputFolderBox.Text, Path.GetFileNameWithoutExtension(csvInputBox.Text) + "_coalescencePlot.csv"));
             string header = ("Intensity Bin, # Peptides, Average Missing Channel Frequency");
             coalWriter.WriteLine(header);
-            Console.WriteLine("writing output");*/
+            WriteMessage("writing output");*/
     
             //Retrieve each peptide's maximum intensity & missing channel frequency
             foreach (PeptideID uniquePeptide in allPeptides.Values)
             {
-                double maximumIntensity = uniquePeptide.maximumIntensity;
+                double maximumIntensity = uniquePeptide.log10MaxIntensity;
                 double missingChannelFrequency = uniquePeptide.missingChannelFrequency;
                 
-                if (uniquePeptide.maximumIntensity > 0 && missingChannelFrequency >= 0)
+                if (uniquePeptide.log10MaxIntensity > 0 && missingChannelFrequency >= 0)
                 {
                     check = new CoalescenceCheck(maximumIntensity, missingChannelFrequency);
                     list.Add(check);
@@ -1046,7 +1104,8 @@ namespace Coon.NeuQuant
         {
             if (browseTargetInput.ShowDialog() == DialogResult.OK)
             {
-                csvInputBox.Text = browseTargetInput.FileName;
+                listBox1.Items.AddRange(browseTargetInput.FileNames);
+                //csvInputBox.Text = browseTargetInput.FileName;
             }
         }
 
@@ -1060,12 +1119,41 @@ namespace Coon.NeuQuant
 
         private void start_Click(object sender, EventArgs e)
         {
-            Run();
+            start.Enabled = false;
+            foreach (string file in listBox1.Items)
+            {
+                Run(file);
+            }
+            start.Enabled = true;            
         }
 
         private void Form1_Load(object sender, EventArgs e)
         {
 
+        }
+
+        private void Form1_DragEnter(object sender, DragEventArgs e)
+        {
+            e.Effect = DragDropEffects.All;
+        }
+
+        private void Form1_DragDrop(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
+                listBox1.Items.AddRange(files);
+            }
+        }
+
+        private void browseTargetInput_FileOk(object sender, CancelEventArgs e)
+        {
+
+        }
+
+        private void button1_Click(object sender, EventArgs e)
+        {
+            listBox1.Items.Clear();
         }
     }
 }
