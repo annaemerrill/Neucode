@@ -559,20 +559,16 @@ namespace Coon.NeuQuant
                 }
                 else
                 {
-                    header1 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Theo Mass 3, Theo Mass 4, Adjusted Mass 1, Adjusted Mass 2, Adjusted Mass 3, Adjusted Mass 4, Resolvable?, Quantified MS1 Scans, # Measurements, Intensity 1, Intensity 2, Intensity 3, Intensity 4, Ratio 2/1, Ratio 3/1, Ratio 4/1, Ratio Count, Missing Channels?, 1 Count, 1 Median, 1 Average, 2 Count, 2 Median, 2 Average, 3 Count, 3 Median, 3 Average, 4 Count, 4 Median, 4 Average");
+                    header1 = ("Scan number(s), Raw File(s), Charge State(s), Best Scan Number, Peptide, # Labels, Theo Mass 1, Theo Mass 2, Theo Mass 3, Theo Mass 4, Adjusted Mass 1, Adjusted Mass 2, Adjusted Mass 3, Adjusted Mass 4, Resolvable?, Quantified MS1 Scans, # Measurements, Intensity 1, Intensity 2, Intensity 3, Intensity 4, Ratio 2/1, Ratio 3/1, Ratio 4/1, Ratio Count, Missing Channels?");
                     writer1.WriteLine(header1);
                     foreach (PeptideID peptide in allPeptides.Values)
                     {
-                        writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25},{26},{27},{28},{29},{30},{31},{32},{33},{34},{35},{36},{37}",
+                        writer1.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25}",
                             peptide.scanNumbers, peptide.rawFiles, peptide.chargeStates, peptide.bestPSM.ScanNumber, peptide.sequence, peptide.numLabels,
                             peptide.theoMasses[0, 0], peptide.theoMasses[1, 0], peptide.theoMasses[2, 0], peptide.theoMasses[3, 0],
                             peptide.adjustedTheoMasses[0, 0], peptide.adjustedTheoMasses[1, 0], peptide.adjustedTheoMasses[2, 0], peptide.adjustedTheoMasses[3, 0], peptide.GetTheoreticalResolvability(0),
                             peptide.countAllPairs, peptide.countAllIsotopes[0], peptide.totalIntensity[0, NUMISOTOPES], peptide.totalIntensity[1, NUMISOTOPES], peptide.totalIntensity[2, NUMISOTOPES], peptide.totalIntensity[3, NUMISOTOPES], 
-                            peptide.heavyToLightRatioSum[0, 0], peptide.heavyToLightRatioSum[1, 0], peptide.heavyToLightRatioSum[2, 0], peptide.finalQuantified[0], peptide.quantifiedNoiseIncluded[0],
-                            peptide.missingChannelsSN[1].Count, PeptideID.calculateMedian(peptide.missingChannelsSN[1]), PeptideID.calculateAverage(peptide.missingChannelsSN[1]),
-                            peptide.missingChannelsSN[2].Count, PeptideID.calculateMedian(peptide.missingChannelsSN[2]), PeptideID.calculateAverage(peptide.missingChannelsSN[2]),
-                            peptide.missingChannelsSN[3].Count, PeptideID.calculateMedian(peptide.missingChannelsSN[3]), PeptideID.calculateAverage(peptide.missingChannelsSN[3]),
-                            peptide.missingChannelsSN[4].Count, PeptideID.calculateMedian(peptide.missingChannelsSN[4]), PeptideID.calculateAverage(peptide.missingChannelsSN[4]));
+                            peptide.heavyToLightRatioSum[0, 0], peptide.heavyToLightRatioSum[1, 0], peptide.heavyToLightRatioSum[2, 0], peptide.finalQuantified[0], peptide.quantifiedNoiseIncluded[0]);
                     }
                 }
                 writer1.Close();
