@@ -15,13 +15,14 @@ namespace Coon.NeuQuant
     class PeptideID
     {
         // Constants
-        public static MassTolerance SILAC = new MassTolerance(MassToleranceType.PPM, 20.0); // Individual SILAC peak tolerance (for lower resolution MS1 scans)
-        public static MassTolerance NEUCODE = new MassTolerance(MassToleranceType.PPM, 10.0); // Individual NeuCode peak tolerance (for higher resolution MS1 scans)
+        //public static MassTolerance SILAC = new MassTolerance(MassToleranceType.PPM, 20.0); // Individual SILAC peak tolerance (for lower resolution MS1 scans)
+        //public static MassTolerance NEUCODE = new MassTolerance(MassToleranceType.PPM, 10.0); // Individual NeuCode peak tolerance (for higher resolution MS1 scans)
         public static double INTENSITYCUTOFF = 1.0 / (2.0 * Math.E); // Intensity threshold for quantitation filtering to eliminate low-level peaks
         public static double SIGNALTONOISE = Form1.MINIMUMSN;
         public static double QUANTRESOLUTION = Form1.QUANTRESOLUTION * 1000.0;
         public static double QUANTSEPARATION = Form1.THEORETICALSEPARATION;
         public static double SPACINGPERCENTAGEERROR = 0.50;
+        public static MassTolerance TOLERANCE = new MassTolerance(MassToleranceType.PPM, (Form1.TOLERANCE * 2.0)); // User-specified ppm tolerance
 
         // Class members
         // Experimental design information
@@ -133,15 +134,15 @@ namespace Coon.NeuQuant
             {
                 double ppmError = Form1.SYSTEMATICERROR;
                 double adjustedMass;
-                int channels;
-                if (Form1.NEUCODE_SIXPLEX_ARG)
-                {
-                    channels = numChannels + 2;
-                }
-                else
-                {
-                    channels = numChannels;
-                }
+                int channels = numChannels;
+                //if (Form1.NEUCODE_SIXPLEX_ARG)
+                //{
+                //    channels = numChannels + 2;
+                //}
+                //else
+                //{
+                //    channels = numChannels;
+                //}
 
                 double[,] adjustedPrecursorMasses = new double[channels, numIsotopes];
                 if (ppmError != 0)
@@ -210,22 +211,22 @@ namespace Coon.NeuQuant
                 return numPeaks;
             }
         }
-        public MassTolerance tolerance
-        {
-            get
-            {
-                MassTolerance tolerance;
-                if (Form1.NEUCODE || Form1.SILAC_DUPLEX_LEUCN || Form1.SILAC_DUPLEX_LEUH)
-                {
-                    tolerance = NEUCODE;
-                }
-                else
-                {
-                    tolerance = SILAC;
-                }
-                return tolerance;
-            }
-        }
+        //public MassTolerance tolerance
+        //{
+        //    get
+        //    {
+        //        MassTolerance tolerance;
+        //        if (Form1.NEUCODE || Form1.SILAC_DUPLEX_LEUCN || Form1.SILAC_DUPLEX_LEUH)
+        //        {
+        //            tolerance = NEUCODE;
+        //        }
+        //        else
+        //        {
+        //            tolerance = SILAC;
+        //        }
+        //        return tolerance;
+        //    }
+        //}
         public double[,] maxIntensity // Considering all pairs, finds the intensity and retention time at which each peptide isotopologue reaches its elution maximum
         {
             get
@@ -566,7 +567,11 @@ namespace Coon.NeuQuant
                     else
                     {
                         spacing = new MassRange[numIsotopologues];
-                        if (Form1.SILAC_DUPLEX_LYSH)
+                        if (Form1.SILAC_DUPLEX_LYSC)
+                        {
+                            theoSpacing1 = numLabels * (6 * (Constants.CARBON13 - Constants.CARBON));
+                        }                        
+                        else if (Form1.SILAC_DUPLEX_LYSH)
                         {
                             theoSpacing1 = numLabels * (8 * (Constants.DEUTERIUM - Constants.HYDROGEN));
                         }
@@ -625,6 +630,7 @@ namespace Coon.NeuQuant
         // Coalescence information
         public bool coalescenceDetected;
         public List<double> coalescedPeakIntensities;
+        public Dictionary<int, List<double>> missingChannelsSN;
 
         // Creates a PeptideID based on a database search peptide identification
         public PeptideID(int scanNumber, int charge, double eValue, string sequenceOriginal, MSDataFile rawFile, string mods)
@@ -656,7 +662,7 @@ namespace Coon.NeuQuant
             for (int i = 0; i < sequenceOriginal.Length; i++)
             {
                 if (sequenceOriginal[i].Equals('l')) sequenceFixed += 'L';
-                else if (sequenceOriginal[i].Equals('k')) sequenceFixed += 'K';
+                else if (sequenceOriginal[i].Equals('k') && !mods.Contains("q")) sequenceFixed += 'K';
                 else sequenceFixed += sequenceOriginal[i];
             }
             
@@ -672,6 +678,7 @@ namespace Coon.NeuQuant
             List<int> oxidationPositions = new List<int>();
             List<int> phosphorylationPositions = new List<int>();
             List<int> tyrosineNHSPositions = new List<int>();
+            List<int> kGGPositions = new List<int>();
             for (int i = 0; i < sequence.Length; i++)
             {
                 if (sequence[i].Equals('m'))
@@ -701,6 +708,11 @@ namespace Coon.NeuQuant
                         phosphorylationPositions.Add(i);
                     }
                 }
+                else if (sequence[i].Equals('k'))
+                {
+                    sequenceNoMods += 'K';
+                    kGGPositions.Add(i);
+                }   
                 else
                 {
                     sequenceNoMods += sequence[i];
@@ -720,9 +732,15 @@ namespace Coon.NeuQuant
             {
                 foreach (int position in phosphorylationPositions)
                 {
-                    peptide.SetModification(NamedChemicalFormula.Phosphorylation, position);
+                    peptide.SetModification(NamedChemicalFormula.Phosphorylation, position + 1);
                 }
             }
+
+            missingChannelsSN = new Dictionary<int, List<double>>();
+            missingChannelsSN.Add(1, new List<double>());
+            missingChannelsSN.Add(2, new List<double>());
+            missingChannelsSN.Add(3, new List<double>());
+            missingChannelsSN.Add(4, new List<double>());
 
             // Set number of labels and search range for PPM correction
             if (Form1.NEUCODE)
@@ -827,7 +845,7 @@ namespace Coon.NeuQuant
 
                 // 4plex NeuCode (metabolic)
                 else if (Form1.NEUCODE_FOURPLEX_LYS8_12MDA)
-                {
+                {                    
                     check1 = new Peptide(peptide);
                     check2 = new Peptide(peptide);
                     check3 = new Peptide(peptide);
@@ -836,6 +854,17 @@ namespace Coon.NeuQuant
                     check2.SetModification(NamedChemicalFormula.GetModification("Lys +8 13C5 2H2 15N1"), ModificationSites.K);
                     check3.SetModification(NamedChemicalFormula.GetModification("Lys +8 13C4 2H4"), ModificationSites.K);
                     check4.SetModification(NamedChemicalFormula.GetModification("Lys +8 2H8"), ModificationSites.K);
+                    if (kGGPositions.Count > 0)
+                    {
+                        foreach (int position in kGGPositions)
+                        {
+                            check1.SetModification(new Mass(NamedChemicalFormula.GetModification("Lys +8 13C6 15N2").Mass.Monoisotopic + 114.0429), position + 1);
+                            check2.SetModification(new Mass(NamedChemicalFormula.GetModification("Lys +8 13C5 2H2 15N1").Mass.Monoisotopic + 114.0429), position + 1);
+                            check3.SetModification(new Mass(NamedChemicalFormula.GetModification("Lys +8 13C4 2H4").Mass.Monoisotopic + 114.0429), position + 1);
+                            check4.SetModification(new Mass(NamedChemicalFormula.GetModification("Lys +8 2H8").Mass.Monoisotopic + 114.0429), position + 1);
+                        }
+                    }
+
                     theoMasses[0, 0] = check1.Mass.Monoisotopic;
                     theoMasses[1, 0] = check2.Mass.Monoisotopic;
                     theoMasses[2, 0] = check3.Mass.Monoisotopic;
@@ -1333,12 +1362,16 @@ namespace Coon.NeuQuant
                 }
 
                 // Duplex SILAC
-                else if (Form1.SILAC_DUPLEX_LYSCN || Form1.SILAC_DUPLEX_LYSH || Form1.SILAC_DUPLEX_LEUCN || Form1.SILAC_DUPLEX_LEUH)
+                else if (Form1.SILAC_DUPLEX_LYSC || Form1.SILAC_DUPLEX_LYSCN || Form1.SILAC_DUPLEX_LYSH || Form1.SILAC_DUPLEX_LEUCN || Form1.SILAC_DUPLEX_LEUH)
                 {
                     check1 = new Peptide(peptide);
                     check2 = new Peptide(peptide);
 
-                    if (Form1.SILAC_DUPLEX_LYSCN)
+                    if (Form1.SILAC_DUPLEX_LYSC)
+                    {
+                        check2.SetModification(NamedChemicalFormula.GetModification("Lys +6 13C6"), ModificationSites.K);
+                    }
+                    else if (Form1.SILAC_DUPLEX_LYSCN)
                     {
                         check2.SetModification(NamedChemicalFormula.GetModification("Lys +8 13C6 15N2"), ModificationSites.K);
                     }
@@ -1653,6 +1686,11 @@ namespace Coon.NeuQuant
             int isotopeCount = 0;
             int clusterCount = 0;
 
+            //if (sequence.Equals("EVHQTLILDPAQRkRLQ"))
+            //{
+            //    int found = 0;
+            //}
+
             /*if (Form1.NEUCODE_ARG_PROLINECONVERSION)
             {
                 double prolineConversion = 5.016775;
@@ -1762,7 +1800,7 @@ namespace Coon.NeuQuant
                             // Search for patterns if missing or duplicate peaks detected
                             if (numIsotopologues > 1)
                             {
-                                MassTolerance tolerance = new MassTolerance(MassToleranceType.PPM, 20.0);
+                                MassTolerance tolerance = new MassTolerance(MassToleranceType.PPM, TOLERANCE.Value * 2.0);
 
                                 MassRange minRange = new MassRange(adjustedTheoMasses[channelIndex,j], tolerance);
                                 MassRange maxRange = new MassRange(adjustedTheoMasses[channelIndex + (numIsotopologues - 1), j], tolerance);
@@ -1794,6 +1832,15 @@ namespace Coon.NeuQuant
                                         else
                                         {
                                             convertedPeaks.Add(newPeak);
+                                        }
+                                    }
+                                    int isotopologuePeaks = convertedPeaks.Count;
+                                    List<double> isotopologueSN = null;
+                                    if (missingChannelsSN.TryGetValue(isotopologuePeaks, out isotopologueSN))
+                                    {
+                                        foreach (ILabeledPeak peakGetSN in convertedPeaks)
+                                        {
+                                            isotopologueSN.Add(peakGetSN.GetSignalToNoise());
                                         }
                                     }
                                     topSignalToNoisePeaks = convertedPeaks.OrderByDescending(peakSort => peakSort.GetSignalToNoise()).Take(numIsotopologues).ToList();
@@ -1917,6 +1964,7 @@ namespace Coon.NeuQuant
                     allPairs[rawFile].Add(pair);
                 }   
             }
+            // Traditional SILAC (i.e., one channel per cluster)
             else
             {
                 isotopeCount = 0;
@@ -1925,13 +1973,13 @@ namespace Coon.NeuQuant
                     peaksCount = 0;
                     for (int i = 0; i < numChannels; i++)
                     {
-                        peaksFound[i, j] = largestPeak(adjustedTheoMasses[i, j], current, tolerance, rawFile);
+                        peaksFound[i, j] = largestPeak(adjustedTheoMasses[i, j], current, TOLERANCE, rawFile);
                         if (peaksFound[i, j] != null)
                         {
                             peaksCount++;
                         }
                     }
-                    if (peaksCount < numChannels && !Form1.NOISEBANDCAP)
+                    if (peaksCount < peaksNeeded)
                     {
                         for (int k = 0; k < numChannels; k++)
                         {
@@ -2230,13 +2278,12 @@ namespace Coon.NeuQuant
                             errorCheck[6, 2] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error3), currentPeak);
                             errorCheck[7, 2] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error3), currentPeak);
                             errorCheck[8, 2] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error3), currentPeak);
-                            errorCheck[9, 3] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error3), currentPeak);
+                            errorCheck[9, 3] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error4), currentPeak);
                             errorCheck[10, 2] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error3), currentPeak);
                             errorCheck[11, 2] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error3), currentPeak);
-                            errorCheck[12, 3] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error4), currentPeak);
+                            errorCheck[12, 2] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error3), currentPeak);
                             errorCheck[13, 3] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error4), currentPeak);
-                            errorCheck[14, 4] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error5), currentPeak);
-
+                            errorCheck[14, 3] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error4), currentPeak);
                         }
                         else if (i == 2)
                         {
@@ -2249,12 +2296,12 @@ namespace Coon.NeuQuant
                             errorCheck[6, 3] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error4), currentPeak);
                             errorCheck[7, 3] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error4), currentPeak);
                             errorCheck[8, 4] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error5), currentPeak);
-                            errorCheck[9, 3] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error4), currentPeak);
+                            errorCheck[9, 4] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error5), currentPeak);
                             errorCheck[10, 3] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error4), currentPeak);
-                            errorCheck[11, 4] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error5), currentPeak);
+                            errorCheck[11, 3] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error4), currentPeak);
                             errorCheck[12, 4] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error5), currentPeak);
                             errorCheck[13, 4] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error5), currentPeak);
-
+                            errorCheck[14, 4] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error5), currentPeak);
                         }
                         else if (i == 3)
                         {
@@ -2267,12 +2314,12 @@ namespace Coon.NeuQuant
                             errorCheck[6, 4] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error5), currentPeak);
                             errorCheck[7, 5] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error6), currentPeak);
                             errorCheck[8, 5] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error6), currentPeak);
-                            errorCheck[9, 4] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error5), currentPeak);
-                            errorCheck[10, 5] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error6), currentPeak);
+                            errorCheck[9, 5] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error6), currentPeak);
+                            errorCheck[10, 4] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error5), currentPeak);
                             errorCheck[11, 5] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error6), currentPeak);
                             errorCheck[12, 5] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error6), currentPeak);
                             errorCheck[13, 5] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error6), currentPeak);
-
+                            errorCheck[14, 5] = new KeyValuePair<double, ILabeledPeak>(Math.Abs(error6), currentPeak);
                         }
                     }
                     // 6 possibilities
@@ -2328,7 +2375,7 @@ namespace Coon.NeuQuant
             }
 
             // Find combination that leads to lowest overall error
-            minError = 100;
+            minError = 1000;
             minErrorIndex = -1;
             for (int j = 0; j < possibleCombinations; j++)
             {
@@ -2784,11 +2831,6 @@ namespace Coon.NeuQuant
                                     pair.peaks[j, k] = null;
                                     pair.peaks[j + 1, k] = null;
                                 }
-                            }
-                            else if (Form1.NOISEBANDCAP && peakCount <= 1)
-                            {
-                                pair.peaks[j, k] = null;
-                                pair.peaks[j + 1, k] = null;
                             }
 
                             if (peakCount < peaksNeeded)
@@ -4281,7 +4323,7 @@ namespace Coon.NeuQuant
                                 }
                                 else if (peak2 != null)
                                 {
-                                    peak1NeutralMass = Mass.MassFromMz(peak1.X, charge);
+                                    peak1NeutralMass = Mass.MassFromMz(peak2.X, charge);
 
                                     if (peak3 != null)
                                     {
@@ -5295,80 +5337,137 @@ namespace Coon.NeuQuant
             allPairs.TryGetValue(rawFile, out all);
             completePairs.TryGetValue(rawFile, out completeOnly);
 
-            foreach (Pair pair in all)
+            if (Form1.NEUCODE)
             {
-                for (int j = 0; j < numIsotopes; j++)
+                foreach (Pair pair in all)
                 {
-                    for (int c = 0; c < numClusters; c++)
+                    for (int j = 0; j < numIsotopes; j++)
                     {
-                        channelIndex = c * numIsotopologues;
-                        // For complete pairs
-                        if (pair.complete[c, j])
+                        for (int c = 0; c < numClusters; c++)
                         {
-                            // If the pair falls above the peptide's coalescence threshold, set peaks to null
-                            if (coalescenceDetected && pair.maxIntensity[c, j] > coalescenceIntensity)
+                            channelIndex = c * numIsotopologues;
+                            // For complete pairs
+                            if (pair.complete[c, j])
                             {
-                                for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
-                                {
-                                    pair.peaks[m, j] = null;
-                                }
-                            }
-                            // Otherwise, add pair to complete list
-                            else
-                            {
-                                // First check to see if the peptide is already on the complete list
-                                bool found = false;
-                                int SN = pair.scanNumber;
-
-                                foreach (Pair noNBC in completeOnly)
-                                {
-                                    if (noNBC.scanNumber == SN)
-                                    {
-                                        // If found, update peaks for that pair
-                                        for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
-                                        {
-                                            noNBC.peaks[m, j] = pair.peaks[m, j];
-                                        }
-                                        found = true;
-                                    }
-                                }
-
-                                // If not found, add pair
-                                if (!found)
-                                {
-                                    Pair noNBCPair = new Pair(this, rawFile, pair.scanNumber, pair.injectionTime);
-                                    for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
-                                    {
-                                        noNBCPair.peaks[m, j] = pair.peaks[m, j];
-                                    }
-                                    completeOnly.Add(noNBCPair);
-                                }
-                            }
-                        }
-                        // For incomplete pairs
-                        else if (pair.peakCount[c,j] >= peaksNeeded)
-                        {
-                            // Check for coalescence
-                            if (coalescenceDetected && pair.maxIntensity[c, j] > coalescenceIntensity)
-                            {
-                                if (pair.maxIntensity[c, j] > coalescenceIntensity)
+                                // If the pair falls above the peptide's coalescence threshold, set peaks to null
+                                if (coalescenceDetected && pair.maxIntensity[c, j] > coalescenceIntensity)
                                 {
                                     for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
                                     {
                                         pair.peaks[m, j] = null;
                                     }
                                 }
-                            }
-                            // Apply noise to missing channels
-                            else
-                            {
-                                for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
+                                // Otherwise, add pair to complete list
+                                else
                                 {
-                                    if (pair.peaks[m, j] == null)
+                                    // First check to see if the peptide is already on the complete list
+                                    bool found = false;
+                                    int SN = pair.scanNumber;
+
+                                    foreach (Pair noNBC in completeOnly)
                                     {
-                                        ThermoLabeledPeak noisePeak = new ThermoLabeledPeak(0.0, pair.averageNoise, pair.charge, pair.averageNoise);
-                                        pair.peaks[m, j] = noisePeak;
+                                        if (noNBC.scanNumber == SN)
+                                        {
+                                            // If found, update peaks for that pair
+                                            for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
+                                            {
+                                                noNBC.peaks[m, j] = pair.peaks[m, j];
+                                            }
+                                            found = true;
+                                        }
                                     }
+
+                                    // If not found, add pair
+                                    if (!found)
+                                    {
+                                        Pair noNBCPair = new Pair(this, rawFile, pair.scanNumber, pair.injectionTime);
+                                        for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
+                                        {
+                                            noNBCPair.peaks[m, j] = pair.peaks[m, j];
+                                        }
+                                        completeOnly.Add(noNBCPair);
+                                    }
+                                }
+                            }
+                            // For incomplete pairs
+                            else if (pair.peakCount[c, j] >= peaksNeeded)
+                            {
+                                // Check for coalescence
+                                if (coalescenceDetected && pair.maxIntensity[c, j] > coalescenceIntensity)
+                                {
+                                    if (pair.maxIntensity[c, j] > coalescenceIntensity)
+                                    {
+                                        for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
+                                        {
+                                            pair.peaks[m, j] = null;
+                                        }
+                                    }
+                                }
+                                // Apply noise to missing channels
+                                else
+                                {
+                                    for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
+                                    {
+                                        if (pair.peaks[m, j] == null)
+                                        {
+                                            ThermoLabeledPeak noisePeak = new ThermoLabeledPeak(0.0, pair.averageNoise, pair.charge, pair.averageNoise);
+                                            pair.peaks[m, j] = noisePeak;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                foreach (Pair pair in all)
+                {
+                    for (int j = 0; j < numIsotopes; j++)
+                    {
+                        // For complete pairs
+                        if (pair.complete[0, j])
+                        {
+                            // First check to see if the peptide is already on the complete list
+                            bool found = false;
+                            int SN = pair.scanNumber;
+
+                            foreach (Pair noNBC in completeOnly)
+                            {
+                                if (noNBC.scanNumber == SN)
+                                {
+                                    // If found, update peaks for that pair
+                                    for (int m = 0; m < numChannels; m++)
+                                    {
+                                        noNBC.peaks[m, j] = pair.peaks[m, j];
+                                    }
+                                    found = true;
+                                }
+                            }
+
+                            // If not found, add pair
+                            if (!found)
+                            {
+                                Pair noNBCPair = new Pair(this, rawFile, pair.scanNumber, pair.injectionTime);
+                                for (int m = 0; m < numChannels; m++)
+                                {
+                                    noNBCPair.peaks[m, j] = pair.peaks[m, j];
+                                }
+                                completeOnly.Add(noNBCPair);
+                            }
+                        }
+
+                        // For incomplete pairs
+                        else if (pair.peakCount[0, j] >= peaksNeeded)
+                        {
+                            // Apply noise to missing channels
+                            for (int m = 0; m < numChannels; m++)
+                            {
+                                if (pair.peaks[m, j] == null)
+                                {
+                                    ThermoLabeledPeak noisePeak = new ThermoLabeledPeak(0.0, pair.averageNoise, pair.charge, pair.averageNoise);
+                                    pair.peaks[m, j] = noisePeak;
                                 }
                             }
                         }
@@ -5478,6 +5577,9 @@ namespace Coon.NeuQuant
             }
             else
             {
+                ILabeledPeak[] peaks = new ILabeledPeak[numChannels];
+                int peaksCount = 0;
+                
                 if (Form1.SILAC_DUPLEX_LEUCN && Form1.CORRECTLEUNLOSS)
                 {
                     int correction = correctIsotopeDistributions(precursorScan, rawFile);
@@ -5485,13 +5587,17 @@ namespace Coon.NeuQuant
                 }
                 for (int i = 0; i < numChannels; i++)
                 {
-                    peak = largestPeak(theoMasses[i, 0], precursorScan, firstSearchMassRange, rawFile);
-                    if (peak != null)
+                    peaks[i] = largestPeak(theoMasses[i, 0], precursorScan, firstSearchMassRange, rawFile);
+                    if (peaks[i] != null) peaksCount++;
+                }
+                if (peaksCount == numChannels)
+                {
+                    for (int i = 0; i < numChannels; i++)
                     {
-                        precursorPPM = MassTolerance.GetTolerance(Mass.MassFromMz(peak.X, charge), theoMasses[i, 0], MassToleranceType.PPM);
+                        precursorPPM = MassTolerance.GetTolerance(Mass.MassFromMz(peaks[i].X, charge), theoMasses[i, 0], MassToleranceType.PPM);
                         ppm = new PrecursorPPM(charge, this.sequence, best.EValue, precursorPPM);
                         ppms.Add(ppm);
-                    }
+                    }    
                 }
             }             
         }
@@ -5766,13 +5872,18 @@ namespace Coon.NeuQuant
          */
         public bool quantFilter(Pair pair, int isotope, int cluster, bool complete)
         {
+            if (sequence.Equals("GNKSPsPPPDGSPAAtPEIRVNHEPEPASGASPGATIPK")) { bool found = true; }
+            
             bool addIntensities = true;
             double[,] max;
             int channelIndex;
-            int count;
 
             // Should not have any null peaks in the pair at this point
-            if (pair.peakCount[cluster, isotope] != numIsotopologues)
+            if (Form1.NEUCODE && pair.peakCount[cluster, isotope] != numIsotopologues)
+            {
+                return false;
+            }
+            else if (!Form1.NEUCODE && pair.peakCount[cluster, isotope] != numChannels)
             {
                 return false;
             }
@@ -5781,40 +5892,81 @@ namespace Coon.NeuQuant
             if (complete)
             {
                 max = maxCompleteIntensity;
-                channelIndex = cluster * numIsotopologues;
-                count = 0;
-                for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+
+                if (Form1.NEUCODE)
                 {
-                    double intensityThreshold = INTENSITYCUTOFF * max[i, 0];
-                    double denormalizedIntensity = pair.peaks[i, isotope].GetDenormalizedIntensity(pair.injectionTime);
-                    if (denormalizedIntensity < intensityThreshold)
+                    channelIndex = cluster * numIsotopologues;
+                    for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
                     {
-                        return false;
+                        double intensityThreshold = INTENSITYCUTOFF * max[i, 0];
+                        double denormalizedIntensity = pair.peaks[i, isotope].GetDenormalizedIntensity(pair.injectionTime);
+                        if (denormalizedIntensity < intensityThreshold)
+                        {
+                            return false;
+                        }
                     }
                 }
+                else
+                {
+                    for (int i = 0; i < numChannels; i++)
+                    {
+                        double intensityThreshold = INTENSITYCUTOFF * max[i, 0];
+                        double denormalizedIntensity = pair.peaks[i, isotope].GetDenormalizedIntensity(pair.injectionTime);
+                        if (denormalizedIntensity < intensityThreshold)
+                        {
+                            return false;
+                        }
+                    }
+                }   
             }
             // For incomplete pairs
             else
             {
                 // Use maximum of complete pairs if more than 2 clusters are complete
                 max = maxIntensity;
-                channelIndex = cluster * numIsotopologues;
-                for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+
+                if (Form1.NEUCODE)
                 {
-                    // For complete pairs
-                    if (pair.complete[cluster, isotope])
+                    channelIndex = cluster * numIsotopologues;
+                    for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
                     {
-                        if (pair.peaks[i, isotope].GetDenormalizedIntensity(pair.injectionTime) < INTENSITYCUTOFF * max[i, 0])
+                        // For complete pairs
+                        if (pair.complete[cluster, isotope])
                         {
-                            return false;
+                            if (pair.peaks[i, isotope].GetDenormalizedIntensity(pair.injectionTime) < INTENSITYCUTOFF * max[i, 0])
+                            {
+                                return false;
+                            }
+                        }
+                        // For incomplete pairs, only consider non noise-band capped channels for quantitative filtering
+                        if (!pair.complete[cluster, isotope])
+                        {
+                            if (pair.peaks[i, isotope].X > 0 && pair.peaks[i, isotope].GetDenormalizedIntensity(pair.injectionTime) < INTENSITYCUTOFF * max[i, 0])
+                            {
+                                return false;
+                            }
                         }
                     }
-                    // For incomplete pairs, only consider non noise-band capped channels for quantitative filtering
-                    if (!pair.complete[cluster, isotope])
+                }
+                else
+                {
+                    for (int i = 0; i < numChannels; i++)
                     {
-                        if (pair.peaks[i, isotope].X > 0 && pair.peaks[i, isotope].GetDenormalizedIntensity(pair.injectionTime) < INTENSITYCUTOFF * max[i, 0])
+                        // For complete pairs
+                        if (pair.complete[cluster, isotope])
                         {
-                            return false;
+                            if (pair.peaks[i, isotope].GetDenormalizedIntensity(pair.injectionTime) < INTENSITYCUTOFF * max[i, 0])
+                            {
+                                return false;
+                            }
+                        }
+                        // For incomplete pairs, only consider non noise-band capped channels for quantitative filtering
+                        if (!pair.complete[cluster, isotope])
+                        {
+                            if (pair.peaks[i, isotope].X > 0 && pair.peaks[i, isotope].GetDenormalizedIntensity(pair.injectionTime) < INTENSITYCUTOFF * max[i, 0])
+                            {
+                                return false;
+                            }
                         }
                     }
                 }
@@ -5826,229 +5978,174 @@ namespace Coon.NeuQuant
          */
         public void quantify()
         {
-            int[,] final = new int[numClusters, 2];
-            quantifiedNoiseIncluded = new bool[numClusters];
-            finalQuantified = new int[numClusters];
-            
-            if (completePairs != null && completePairs.Count > 0)
+            if (Form1.NEUCODE)
             {
-                foreach (List<Pair> pairs in completePairs.Values)
+                int[,] final = new int[numClusters, 2];
+                quantifiedNoiseIncluded = new bool[numClusters];
+                finalQuantified = new int[numClusters];
+
+                if (completePairs != null && completePairs.Count > 0)
                 {
-                    foreach (Pair pair in pairs)
+                    foreach (List<Pair> pairs in completePairs.Values)
                     {
-                        for (int j = 0; j < numIsotopes; j++)
+                        foreach (Pair pair in pairs)
                         {
-                            for (int c = 0; c < numClusters; c++)
+                            for (int j = 0; j < numIsotopes; j++)
                             {
-                                if (Form1.QUANTFILTER)
+                                for (int c = 0; c < numClusters; c++)
                                 {
-                                    // Eliminate low-level pairs by quantitative filtering
-                                    if (quantFilter(pair, j, c, true))
+                                    if (Form1.QUANTFILTER)
+                                    {
+                                        // Eliminate low-level pairs by quantitative filtering
+                                        if (quantFilter(pair, j, c, true))
+                                        {
+                                            int channelIndex = c * numIsotopologues;
+                                            for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+                                            {
+                                                double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
+                                                completeTotalIntensity[i, j] += denormalizedIntensity;
+                                                completeTotalIntensity[i, numIsotopes] += denormalizedIntensity;
+                                            }
+                                            final[c, 1]++;
+                                        }
+                                    }
+                                    else
                                     {
                                         int channelIndex = c * numIsotopologues;
+                                        bool noNullPeaks = true;
                                         for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
                                         {
-                                            double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
-                                            completeTotalIntensity[i, j] += denormalizedIntensity;
-                                            completeTotalIntensity[i, numIsotopes] += denormalizedIntensity;
+                                            if (pair.peaks[i, j] == null)
+                                            {
+                                                noNullPeaks = false;
+                                            }
                                         }
-                                        final[c, 1]++;
+
+                                        if (noNullPeaks)
+                                        {
+                                            for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+                                            {
+                                                double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
+                                                completeTotalIntensity[i, j] += denormalizedIntensity;
+                                                completeTotalIntensity[i, numIsotopes] += denormalizedIntensity;
+                                            }
+                                            final[c, 1]++;
+                                        }
                                     }
-                                }
-                                else
+                                } // End cluster loop
+                            } // End isotope loop
+                        } // End pair loop
+                    } // End pair list loop
+                }
+                if (allPairs != null && allPairs.Count > 0)
+                {
+                    foreach (List<Pair> pairs in allPairs.Values)
+                    {
+                        foreach (Pair pair in pairs)
+                        {
+                            for (int j = 0; j < numIsotopes; j++)
+                            {
+                                for (int c = 0; c < numClusters; c++)
                                 {
                                     int channelIndex = c * numIsotopologues;
-                                    bool noNullPeaks = true;
-                                    for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+                                    if (Form1.QUANTFILTER)
                                     {
-                                        if (pair.peaks[i, j] == null)
-                                        {
-                                            noNullPeaks = false;
-                                        }
-                                    }
+                                        //Use a peak's intensity if it is not noise-band capped and its intensity is greater than 1/2e of the maximum intensity
 
-                                    if (noNullPeaks)
-                                    {
-                                        for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+                                        if (quantFilter(pair, j, c, false))
                                         {
-                                            double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
-                                            completeTotalIntensity[i, j] += denormalizedIntensity;
-                                            completeTotalIntensity[i, numIsotopes] += denormalizedIntensity;
-                                        }
-                                        final[c, 1]++;
-                                    }
-                                }
-                            } // End cluster loop
-                        } // End isotope loop
-                    } // End pair loop
-                } // End pair list loop
-            }
-            if (allPairs != null && allPairs.Count > 0)
-            {
-                foreach (List<Pair> pairs in allPairs.Values)
-                {
-                    foreach (Pair pair in pairs)
-                    {
-                        for (int j = 0; j < numIsotopes; j++)
-                        {
-                            for (int c = 0; c < numClusters; c++)
-                            {
-                                int channelIndex = c * numIsotopologues;
-                                if (Form1.QUANTFILTER)
-                                {
-                                    //Use a peak's intensity if it is not noise-band capped and its intensity is greater than 1/2e of the maximum intensity
-
-                                    if (quantFilter(pair, j, c, false))
-                                    {
-                                        for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
-                                        {
-                                            double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
-                                            totalIntensity[i, j] += denormalizedIntensity;
-                                            totalIntensity[i, numIsotopes] += denormalizedIntensity;
-
-                                        }
-                                        final[c, 0]++;
-                                    }
-                                }
-                                else
-                                {
-                                    bool noNullPeaks = true;
-                                    int realPeaks = 0;
-                                    for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
-                                    {
-                                        if (pair.peaks[i, j] == null)
-                                        {
-                                            noNullPeaks = false;
-                                        }
-                                        else
-                                        {
-                                            realPeaks++;
-                                        }
-                                    }
-
-                                    if (noNullPeaks)
-                                    {
-                                        for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
-                                        {
-                                            if (pair.peaks[i, j] != null)
+                                            for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
                                             {
                                                 double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
                                                 totalIntensity[i, j] += denormalizedIntensity;
                                                 totalIntensity[i, numIsotopes] += denormalizedIntensity;
+
+                                            }
+                                            final[c, 0]++;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        bool noNullPeaks = true;
+                                        int realPeaks = 0;
+                                        for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+                                        {
+                                            if (pair.peaks[i, j] == null)
+                                            {
+                                                noNullPeaks = false;
+                                            }
+                                            else
+                                            {
+                                                realPeaks++;
                                             }
                                         }
-                                        final[c, 0]++;
+
+                                        if (noNullPeaks)
+                                        {
+                                            for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+                                            {
+                                                if (pair.peaks[i, j] != null)
+                                                {
+                                                    double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
+                                                    totalIntensity[i, j] += denormalizedIntensity;
+                                                    totalIntensity[i, numIsotopes] += denormalizedIntensity;
+                                                }
+                                            }
+                                            final[c, 0]++;
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
-            } 
 
-            double lightInt;
-            double heavyInt;
-            bool quantified = false;
-            int minimumTotalPairs;
-            int minimumNoNBCPairs;
-            int minimumPostQFPairs;
+                double lightInt;
+                double heavyInt;
+                bool quantified = false;
+                int minimumTotalPairs;
+                int minimumNoNBCPairs;
+                int minimumPostQFPairs;
 
-            if (Form1.MULTIINJECT)
-            {
-                minimumTotalPairs = 1;
-                minimumNoNBCPairs = 1;
-                minimumPostQFPairs = 1;
-            }
-            else
-            {
-                minimumTotalPairs = 3;
-                minimumNoNBCPairs = 3;
-                minimumPostQFPairs = 3;
-            }
-
-            if (coalescenceDetected)
-            {
-                //Use only complete pairs for quantification
-                for (int c = 0; c < numClusters; c++)
+                if (Form1.MULTIINJECT)
                 {
-                    int channelIndex = c * (numIsotopologues - 1);
-                    for (int i = channelIndex + 1; i < channelIndex + numIsotopologues; i++)
+                    minimumTotalPairs = 1;
+                    minimumNoNBCPairs = 1;
+                    minimumPostQFPairs = 1;
+                }
+                else
+                {
+                    minimumTotalPairs = 3;
+                    minimumNoNBCPairs = 3;
+                    minimumPostQFPairs = 3;
+                }
+
+                if (coalescenceDetected)
+                {
+                    //Use only complete pairs for quantification
+                    for (int c = 0; c < numClusters; c++)
                     {
-                        int index1 = c * numIsotopologues;
-                        int index2 = (c * numIsotopologues) + 1;
-                        // Use only complete pairs for quantification
-                        for (int n = channelIndex + 1; n < channelIndex + numIsotopologues; n++)
+                        int channelIndex = c * (numIsotopologues - 1);
+                        for (int i = channelIndex + 1; i < channelIndex + numIsotopologues; i++)
                         {
-                            lightInt = completeTotalIntensity[index1, numIsotopes];
-                            heavyInt = completeTotalIntensity[index2, numIsotopes];
-                            finalQuantified[c] = final[c, 1];
-                            if (lightInt > 0 && heavyInt > 0)
+                            int index1 = c * numIsotopologues;
+                            int index2 = (c * numIsotopologues) + 1;
+                            // Use only complete pairs for quantification
+                            for (int n = channelIndex + 1; n < channelIndex + numIsotopologues; n++)
                             {
-                                heavyToLightRatioSum[n - 1, 0] = heavyInt / lightInt;
-                                quantifiedNoiseIncluded[c] = false;
+                                lightInt = completeTotalIntensity[index1, numIsotopes];
+                                heavyInt = completeTotalIntensity[index2, numIsotopes];
+                                finalQuantified[c] = final[c, 1];
+                                if (lightInt > 0 && heavyInt > 0)
+                                {
+                                    heavyToLightRatioSum[n - 1, 0] = heavyInt / lightInt;
+                                    quantifiedNoiseIncluded[c] = false;
+                                }
+                                index2++;
                             }
-                            index2++;
                         }
                     }
                 }
-            }
-            else
-            {
-                if (!Form1.NEUCODE)
-                {
-                    if (final[0, 1] >= minimumPostQFPairs)
-                    {
-                        finalQuantified[0] = final[0, 1];
-                        quantifiedNoiseIncluded[0] = false;
-                        
-                        for (int i = 1; i < numChannels; i++)
-                        {
-                            if (Form1.NOISEBANDCAP)
-                            {
-                                totalIntensity = completeTotalIntensity;
-                            }
-                            // Use only complete pairs for quantification
-                            int index1 = 0;
-                            int index2 = i;
-
-                            lightInt = completeTotalIntensity[index1, numIsotopes];
-                            heavyInt = completeTotalIntensity[index2, numIsotopes];
-
-                            if (lightInt > 0 && heavyInt > 0)
-                            {
-                                heavyToLightRatioSum[i - 1, 0] = heavyInt / lightInt;
-                            }
-                        }
-                    }
-                        else if (final[0, 0] >= minimumPostQFPairs)
-                        {
-                            finalQuantified[0] = final[0, 0];
-                            quantifiedNoiseIncluded[0] = true;
-
-                            for (int i = 1; i < numChannels; i++)
-                            {
-                                int index1 = 0;
-                                int index2 = i;
-
-                                lightInt = totalIntensity[index1, numIsotopes];
-                                heavyInt = totalIntensity[index2, numIsotopes];
-
-                                if (lightInt > 0 && heavyInt > 0)
-                                {
-                                    heavyToLightRatioSum[i - 1, 0] = heavyInt / lightInt;
-                                }
-                            }
-                        }
-                        else
-                        {
-                            // Not able to quantify
-                            for (int i = 0; i < numChannels; i++)
-                            {
-                                completeTotalIntensity[i, numIsotopes] = 0;
-                                totalIntensity[i, numIsotopes] = 0;
-                            }
-                        }
-                    }
                 else
                 {
                     for (int c = 0; c < numClusters; c++)
@@ -6060,13 +6157,14 @@ namespace Coon.NeuQuant
                             finalQuantified[c] = final[c, 1];
                             quantifiedNoiseIncluded[c] = false;
 
-                            if (Form1.NOISEBANDCAP)
-                            {
-                                totalIntensity = completeTotalIntensity;
-                            }
                             // Use only complete pairs for quantification
                             for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
                             {
+                                if (Form1.NOISEBANDCAP)
+                                {
+                                    totalIntensity[i, numIsotopes] = completeTotalIntensity[i, numIsotopes];
+                                }
+
                                 int index1 = channelIndex;
                                 int index2 = i + 1;
                                 // Use only complete pairs for quantification
@@ -6118,6 +6216,215 @@ namespace Coon.NeuQuant
                         }
                     }
                 }
+            }
+            // Traditional SILAC
+            else
+            {
+                int[,] final = new int[1, 2];
+                quantifiedNoiseIncluded = new bool[1];
+                finalQuantified = new int[1];
+
+                if (completePairs != null && completePairs.Count > 0)
+                {
+                    foreach (List<Pair> pairs in completePairs.Values)
+                    {
+                        foreach (Pair pair in pairs)
+                        {
+                            for (int j = 0; j < numIsotopes; j++)
+                            {
+                                if (Form1.QUANTFILTER)
+                                {
+                                    // Eliminate low-level pairs by quantitative filtering
+                                    if (quantFilter(pair, j, 0, true))
+                                    {
+                                        for (int i = 0; i < numChannels; i++)
+                                        {
+                                            double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
+                                            completeTotalIntensity[i, j] += denormalizedIntensity;
+                                            completeTotalIntensity[i, numIsotopes] += denormalizedIntensity;
+                                        }
+                                        final[0, 1]++;
+                                    }
+                                }
+                                else
+                                {
+                                    bool noNullPeaks = true;
+                                    for (int i = 0; i < numChannels; i++)
+                                    {
+                                        if (pair.peaks[i, j] == null)
+                                        {
+                                            noNullPeaks = false;
+                                        }
+                                    }
+
+                                    if (noNullPeaks)
+                                    {
+                                        for (int i = 0; i < numChannels; i++)
+                                        {
+                                            double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
+                                            completeTotalIntensity[i, j] += denormalizedIntensity;
+                                            completeTotalIntensity[i, numIsotopes] += denormalizedIntensity;
+                                        }
+                                        final[0, 1]++;
+                                    }
+                                }
+                            } // End isotope loop
+                        } // End pair loop
+                    } // End pair list loop
+                }
+                if (allPairs != null && allPairs.Count > 0)
+                {
+                    foreach (List<Pair> pairs in allPairs.Values)
+                    {
+                        foreach (Pair pair in pairs)
+                        {
+                            for (int j = 0; j < numIsotopes; j++)
+                            {
+                                if (Form1.QUANTFILTER)
+                                {
+                                    //Use a peak's intensity if it is not noise-band capped and its intensity is greater than 1/2e of the maximum intensity
+
+                                    if (quantFilter(pair, j, 0, false))
+                                    {
+                                        for (int i = 0; i < numChannels; i++)
+                                        {
+                                            double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
+                                            totalIntensity[i, j] += denormalizedIntensity;
+                                            totalIntensity[i, numIsotopes] += denormalizedIntensity;
+
+                                        }
+                                        final[0, 0]++;
+                                    }
+                                }
+                                else
+                                {
+                                    bool noNullPeaks = true;
+                                    int realPeaks = 0;
+                                    for (int i = 0; i < numChannels; i++)
+                                    {
+                                        if (pair.peaks[i, j] == null)
+                                        {
+                                            noNullPeaks = false;
+                                        }
+                                        else
+                                        {
+                                            realPeaks++;
+                                        }
+                                    }
+
+                                    if (noNullPeaks)
+                                    {
+                                        for (int i = 0; i < numChannels; i++)
+                                        {
+                                            if (pair.peaks[i, j] != null)
+                                            {
+                                                double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
+                                                totalIntensity[i, j] += denormalizedIntensity;
+                                                totalIntensity[i, numIsotopes] += denormalizedIntensity;
+                                            }
+                                        }
+                                        final[0, 0]++;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                double lightInt;
+                double heavyInt;
+                bool quantified = false;
+                int minimumTotalPairs = 3;
+                int minimumNoNBCPairs = 3;
+                int minimumPostQFPairs = 3;
+
+                if (final[0, 1] >= minimumPostQFPairs)
+                {
+                    finalQuantified[0] = final[0, 1];
+                    quantifiedNoiseIncluded[0] = false;
+
+                    for (int i = 1; i < numChannels; i++)
+                    {
+                        if (Form1.NOISEBANDCAP)
+                        {
+                            totalIntensity = completeTotalIntensity;
+                        }
+                        // Use only complete pairs for quantification
+                        int index1 = 0;
+                        int index2 = i;
+
+                        lightInt = completeTotalIntensity[index1, numIsotopes];
+                        heavyInt = completeTotalIntensity[index2, numIsotopes];
+
+                        if (lightInt > 0 && heavyInt > 0)
+                        {
+                            heavyToLightRatioSum[i - 1, 0] = heavyInt / lightInt;
+                        }
+                    }
+                }
+                else if (final[0, 0] >= minimumPostQFPairs)
+                {
+                    finalQuantified[0] = final[0, 0];
+                    quantifiedNoiseIncluded[0] = true;
+
+                    for (int i = 1; i < numChannels; i++)
+                    {
+                        int index1 = 0;
+                        int index2 = i;
+
+                        lightInt = totalIntensity[index1, numIsotopes];
+                        heavyInt = totalIntensity[index2, numIsotopes];
+
+                        if (lightInt > 0 && heavyInt > 0)
+                        {
+                            heavyToLightRatioSum[i - 1, 0] = heavyInt / lightInt;
+                        }
+                    }
+                }
+                else
+                {
+                    // Not able to quantify
+                    for (int i = 0; i < numChannels; i++)
+                    {
+                        completeTotalIntensity[i, numIsotopes] = 0;
+                        totalIntensity[i, numIsotopes] = 0;
+                    }
+                }
+            }  
+        }
+
+        public static double calculateAverage(List<double> numbers)
+        {
+            double sum = 0;
+            double count = (double)numbers.Count;
+
+            if (count == 0) return 0;
+
+            foreach (double number in numbers)
+            {
+                sum += number;
+            }
+
+            return sum / count;
+        }
+
+        public static double calculateMedian(List<double> numbers)
+        {
+            int count = numbers.Count;
+
+            numbers.Sort();
+
+            if (count == 0)
+            {
+                return 0;
+            }
+            else if (count % 2 != 0)
+            {
+                return numbers[count / 2];
+            }
+            else
+            {
+                return (numbers[count / 2] + numbers[(count / 2) - 1]) / 2.0;
             }
         }
     }

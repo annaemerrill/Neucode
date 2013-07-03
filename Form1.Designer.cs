@@ -82,8 +82,11 @@
             this.Icat = new System.Windows.Forms.RadioButton();
             this.listBox1 = new System.Windows.Forms.ListBox();
             this.splitContainer1 = new System.Windows.Forms.SplitContainer();
-            this.richTextBox1 = new System.Windows.Forms.RichTextBox();
+            this.label14 = new System.Windows.Forms.Label();
+            this.searchTolerance = new System.Windows.Forms.NumericUpDown();
             this.button1 = new System.Windows.Forms.Button();
+            this.richTextBox1 = new System.Windows.Forms.RichTextBox();
+            this.SILACLys6C = new System.Windows.Forms.RadioButton();
             ((System.ComponentModel.ISupportInitialize)(this.rtWindow)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.signalToNoiseThreshold)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.Isotopes)).BeginInit();
@@ -93,6 +96,7 @@
             this.splitContainer1.Panel1.SuspendLayout();
             this.splitContainer1.Panel2.SuspendLayout();
             this.splitContainer1.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.searchTolerance)).BeginInit();
             this.SuspendLayout();
             // 
             // label1
@@ -338,7 +342,7 @@
             // SILACLys8CN
             // 
             this.SILACLys8CN.AutoSize = true;
-            this.SILACLys8CN.Location = new System.Drawing.Point(9, 206);
+            this.SILACLys8CN.Location = new System.Drawing.Point(9, 223);
             this.SILACLys8CN.Name = "SILACLys8CN";
             this.SILACLys8CN.Size = new System.Drawing.Size(113, 17);
             this.SILACLys8CN.TabIndex = 30;
@@ -349,7 +353,7 @@
             // SILACLys8D
             // 
             this.SILACLys8D.AutoSize = true;
-            this.SILACLys8D.Location = new System.Drawing.Point(9, 229);
+            this.SILACLys8D.Location = new System.Drawing.Point(9, 246);
             this.SILACLys8D.Name = "SILACLys8D";
             this.SILACLys8D.Size = new System.Drawing.Size(106, 17);
             this.SILACLys8D.TabIndex = 31;
@@ -360,7 +364,7 @@
             // NeuCodeLys1
             // 
             this.NeuCodeLys1.AutoSize = true;
-            this.NeuCodeLys1.Location = new System.Drawing.Point(9, 295);
+            this.NeuCodeLys1.Location = new System.Drawing.Point(9, 312);
             this.NeuCodeLys1.Name = "NeuCodeLys1";
             this.NeuCodeLys1.Size = new System.Drawing.Size(141, 17);
             this.NeuCodeLys1.TabIndex = 32;
@@ -371,7 +375,7 @@
             // NeuCodeLys8Duplex
             // 
             this.NeuCodeLys8Duplex.AutoSize = true;
-            this.NeuCodeLys8Duplex.Location = new System.Drawing.Point(9, 318);
+            this.NeuCodeLys8Duplex.Location = new System.Drawing.Point(9, 335);
             this.NeuCodeLys8Duplex.Name = "NeuCodeLys8Duplex";
             this.NeuCodeLys8Duplex.Size = new System.Drawing.Size(147, 17);
             this.NeuCodeLys8Duplex.TabIndex = 33;
@@ -382,7 +386,7 @@
             // NeuCodeLys8Triplex
             // 
             this.NeuCodeLys8Triplex.AutoSize = true;
-            this.NeuCodeLys8Triplex.Location = new System.Drawing.Point(9, 341);
+            this.NeuCodeLys8Triplex.Location = new System.Drawing.Point(9, 358);
             this.NeuCodeLys8Triplex.Name = "NeuCodeLys8Triplex";
             this.NeuCodeLys8Triplex.Size = new System.Drawing.Size(147, 17);
             this.NeuCodeLys8Triplex.TabIndex = 34;
@@ -393,7 +397,7 @@
             // NeuCodeLys8Fourplex
             // 
             this.NeuCodeLys8Fourplex.AutoSize = true;
-            this.NeuCodeLys8Fourplex.Location = new System.Drawing.Point(9, 364);
+            this.NeuCodeLys8Fourplex.Location = new System.Drawing.Point(9, 381);
             this.NeuCodeLys8Fourplex.Name = "NeuCodeLys8Fourplex";
             this.NeuCodeLys8Fourplex.Size = new System.Drawing.Size(147, 17);
             this.NeuCodeLys8Fourplex.TabIndex = 35;
@@ -404,7 +408,7 @@
             // NeuCodeLys8Sixplex
             // 
             this.NeuCodeLys8Sixplex.AutoSize = true;
-            this.NeuCodeLys8Sixplex.Location = new System.Drawing.Point(9, 387);
+            this.NeuCodeLys8Sixplex.Location = new System.Drawing.Point(9, 404);
             this.NeuCodeLys8Sixplex.Name = "NeuCodeLys8Sixplex";
             this.NeuCodeLys8Sixplex.Size = new System.Drawing.Size(141, 17);
             this.NeuCodeLys8Sixplex.TabIndex = 36;
@@ -424,7 +428,7 @@
             // NeuCodeLeu7Duplex
             // 
             this.NeuCodeLeu7Duplex.AutoSize = true;
-            this.NeuCodeLeu7Duplex.Location = new System.Drawing.Point(9, 410);
+            this.NeuCodeLeu7Duplex.Location = new System.Drawing.Point(9, 427);
             this.NeuCodeLeu7Duplex.Name = "NeuCodeLeu7Duplex";
             this.NeuCodeLeu7Duplex.Size = new System.Drawing.Size(149, 17);
             this.NeuCodeLeu7Duplex.TabIndex = 38;
@@ -435,7 +439,7 @@
             // SILACLeu7CN
             // 
             this.SILACLeu7CN.AutoSize = true;
-            this.SILACLeu7CN.Location = new System.Drawing.Point(9, 252);
+            this.SILACLeu7CN.Location = new System.Drawing.Point(9, 269);
             this.SILACLeu7CN.Name = "SILACLeu7CN";
             this.SILACLeu7CN.Size = new System.Drawing.Size(115, 17);
             this.SILACLeu7CN.TabIndex = 39;
@@ -446,7 +450,7 @@
             // SILACLeu7D
             // 
             this.SILACLeu7D.AutoSize = true;
-            this.SILACLeu7D.Location = new System.Drawing.Point(9, 275);
+            this.SILACLeu7D.Location = new System.Drawing.Point(9, 292);
             this.SILACLeu7D.Name = "SILACLeu7D";
             this.SILACLeu7D.Size = new System.Drawing.Size(108, 17);
             this.SILACLeu7D.TabIndex = 40;
@@ -668,6 +672,9 @@
             // 
             // splitContainer1.Panel1
             // 
+            this.splitContainer1.Panel1.Controls.Add(this.SILACLys6C);
+            this.splitContainer1.Panel1.Controls.Add(this.label14);
+            this.splitContainer1.Panel1.Controls.Add(this.searchTolerance);
             this.splitContainer1.Panel1.Controls.Add(this.button1);
             this.splitContainer1.Panel1.Controls.Add(this.IncompleteIncorporation);
             this.splitContainer1.Panel1.Controls.Add(this.listBox1);
@@ -727,14 +734,31 @@
             this.splitContainer1.SplitterDistance = 470;
             this.splitContainer1.TabIndex = 63;
             // 
-            // richTextBox1
+            // label14
             // 
-            this.richTextBox1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.richTextBox1.Location = new System.Drawing.Point(0, 0);
-            this.richTextBox1.Name = "richTextBox1";
-            this.richTextBox1.Size = new System.Drawing.Size(622, 131);
-            this.richTextBox1.TabIndex = 0;
-            this.richTextBox1.Text = "";
+            this.label14.AutoSize = true;
+            this.label14.Location = new System.Drawing.Point(325, 364);
+            this.label14.Name = "label14";
+            this.label14.Size = new System.Drawing.Size(51, 13);
+            this.label14.TabIndex = 65;
+            this.label14.Text = "Ppm (+/-)";
+            // 
+            // searchTolerance
+            // 
+            this.searchTolerance.Location = new System.Drawing.Point(324, 380);
+            this.searchTolerance.Minimum = new decimal(new int[] {
+            1,
+            0,
+            0,
+            0});
+            this.searchTolerance.Name = "searchTolerance";
+            this.searchTolerance.Size = new System.Drawing.Size(39, 20);
+            this.searchTolerance.TabIndex = 64;
+            this.searchTolerance.Value = new decimal(new int[] {
+            5,
+            0,
+            0,
+            0});
             // 
             // button1
             // 
@@ -745,6 +769,26 @@
             this.button1.Text = "Clear";
             this.button1.UseVisualStyleBackColor = true;
             this.button1.Click += new System.EventHandler(this.button1_Click);
+            // 
+            // richTextBox1
+            // 
+            this.richTextBox1.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.richTextBox1.Location = new System.Drawing.Point(0, 0);
+            this.richTextBox1.Name = "richTextBox1";
+            this.richTextBox1.Size = new System.Drawing.Size(622, 131);
+            this.richTextBox1.TabIndex = 0;
+            this.richTextBox1.Text = "";
+            // 
+            // SILACLys6C
+            // 
+            this.SILACLys6C.AutoSize = true;
+            this.SILACLys6C.Location = new System.Drawing.Point(9, 200);
+            this.SILACLys6C.Name = "SILACLys6C";
+            this.SILACLys6C.Size = new System.Drawing.Size(105, 17);
+            this.SILACLys6C.TabIndex = 66;
+            this.SILACLys6C.TabStop = true;
+            this.SILACLys6C.Text = "Lys SILAC: +6(C)";
+            this.SILACLys6C.UseVisualStyleBackColor = true;
             // 
             // Form1
             // 
@@ -768,6 +812,7 @@
             this.splitContainer1.Panel2.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)(this.splitContainer1)).EndInit();
             this.splitContainer1.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)(this.searchTolerance)).EndInit();
             this.ResumeLayout(false);
 
         }
@@ -830,6 +875,9 @@
         private System.Windows.Forms.SplitContainer splitContainer1;
         private System.Windows.Forms.RichTextBox richTextBox1;
         private System.Windows.Forms.Button button1;
+        private System.Windows.Forms.Label label14;
+        private System.Windows.Forms.NumericUpDown searchTolerance;
+        private System.Windows.Forms.RadioButton SILACLys6C;
     }
 }
 

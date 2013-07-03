@@ -45,30 +45,50 @@ namespace Coon.NeuQuant
                 int clusters = parent.numClusters;
                 int isotopologues = parent.numIsotopologues;
                 int channelIndex;
-                bool[,] complete = new bool[clusters, isotopes];
+                bool[,] complete;
+                if (Form1.NEUCODE)
                 {
+                    complete = new bool[clusters, isotopes];
                     if (peaks != null)
                     {
                         for (int c = 0; c < clusters; c++)
                         {
                             for (int j = 0; j < isotopes; j++)
                             {
-                                complete[c,j] = true;
+                                complete[c, j] = true;
                                 channelIndex = c * isotopologues;
                                 for (int i = channelIndex; i < channelIndex + isotopologues; i++)
                                 {
                                     // A cluster is incomplete if any of its peaks are null or noise-band capped
                                     if (peaks[i, j] == null || peaks[i, j].X == 0)
                                     {
-                                        complete[c,j] = false;
+                                        complete[c, j] = false;
                                     }
                                 }
                             }
                         }
-                        return complete;
                     }
+                    return complete;
                 }
-                return complete;
+                else
+                {
+                    complete = new bool[1, isotopes];
+                    if (peaks != null)
+                    {
+                        for (int j = 0; j < isotopes; j++)
+                        {
+                            complete[0,j] = true;
+                            for (int i = 0; i < channels; i++)
+                            {
+                                if (peaks[i, j] == null || peaks[i, j].X == 0)
+                                {
+                                    complete[0, j] = false;
+                                }
+                            }
+                        }
+                    }
+                    return complete;
+                }
             }
         }
         public double[,] maxIntensity // Keeps track of each cluster's maximum intensity (rows = # clusters; columns = # isotopes)
@@ -116,16 +136,32 @@ namespace Coon.NeuQuant
                 int[,] count = new int[clusters, isotopes];
                 if (peaks != null)
                 {
-                    for (int j = 0; j < isotopes; j++)
+                    if (Form1.NEUCODE)
                     {
-                        for (int c = 0; c < clusters; c++)
+                        for (int j = 0; j < isotopes; j++)
                         {
-                            int channelIndex = c * isotopologues;
-                            for (int i = channelIndex; i < channelIndex + isotopologues; i++)
+                            for (int c = 0; c < clusters; c++)
+                            {
+                                int channelIndex = c * isotopologues;
+                                for (int i = channelIndex; i < channelIndex + isotopologues; i++)
+                                {
+                                    if (peaks[i, j] != null)
+                                    {
+                                        count[c, j]++;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        for (int j = 0; j < isotopes; j++)
+                        {
+                            for (int i = 0; i < channels; i++)
                             {
                                 if (peaks[i, j] != null)
                                 {
-                                    count[c,j]++;
+                                    count[0, j]++;
                                 }
                             }
                         }
