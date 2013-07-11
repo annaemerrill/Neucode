@@ -83,9 +83,9 @@ namespace Coon.NeuQuant
         {
 
             InitializeComponent();
-            //rawFileBox.Text = @"E:\Desktop\4-plex Human\RAW\AEM";
-            //listBox1.Items.Add(@"E:\Desktop\4-plex Human\FDR\AEM\Batch\target.csv");
-            //outputFolderBox.Text = @"E:\Desktop\4-plex Human\QUANT\All";
+            rawFileBox.Text = @"E:\Desktop\4-plex Yeast\Biological\RAW\4-plex";
+            //listBox1.Items.Add(@"E:\Desktop\NeuCode 4-plex KGG\FDR\07092013 Josh B\DK06_95LDA_50ppm_trypsin_StaticK8_30k_search_peptides_OMSSAformat.csv");
+            outputFolderBox.Text = @"E:\Desktop\4-plex Yeast\Biological\QUANT\4-plex";
             //csvInputBox.Text = @"E:\Desktop\NeuCode vs. TMT 4-plex\FDR\target-decoy\AEM_ITMS_CID_target.csv";
         }
 
