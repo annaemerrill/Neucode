@@ -17,7 +17,7 @@
     <SolutionDir Condition="$(SolutionDir) == '' Or $(SolutionDir) == '*Undefined*'">.\</SolutionDir>
     <RestorePackages>true</RestorePackages>
     <IsWebBootstrapper>false</IsWebBootstrapper>
-    <PublishUrl>\\coongrp\Groups\software\NeuQuant 32-bit\</PublishUrl>
+    <PublishUrl>\\coongrp\Groups\software\NeuQuant 64-bit\</PublishUrl>
     <Install>true</Install>
     <InstallFrom>Unc</InstallFrom>
     <UpdateEnabled>true</UpdateEnabled>
@@ -29,7 +29,7 @@
     <MapFileExtensions>true</MapFileExtensions>
     <ProductName>NeuQuant</ProductName>
     <PublisherName>CoonWare</PublisherName>
-    <ApplicationRevision>18</ApplicationRevision>
+    <ApplicationRevision>48</ApplicationRevision>
     <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
     <UseApplicationTrust>false</UseApplicationTrust>
     <PublishWizardCompleted>true</PublishWizardCompleted>
@@ -116,8 +116,11 @@
       <DependentUpon>Form1.cs</DependentUpon>
     </Compile>
     <Compile Include="IsotopePair.cs" />
+    <Compile Include="MessageEventArgs.cs" />
     <Compile Include="NeuCodeMZPeak.cs" />
+    <Compile Include="NonQuantifiableType.cs" />
     <Compile Include="Pair.cs" />
+    <Compile Include="PeakPattern.cs" />
     <Compile Include="PeptideID.cs" />
     <Compile Include="PeptideSpectralMatch.cs" />
     <Compile Include="PrecursorPPM.cs" />
@@ -138,6 +141,7 @@
       <DesignTime>True</DesignTime>
     </Compile>
     <None Include="app.config" />
+    <None Include="ClassDiagram1.cd" />
     <None Include="NeuQuant_TemporaryKey.pfx" />
     <None Include="packages.config" />
     <None Include="Properties\Settings.settings">

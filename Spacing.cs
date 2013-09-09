@@ -3,55 +3,60 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using CSMSL.Spectral;
+using CSMSL.Chemistry;
 using CSMSL.IO.Thermo;
 using CSMSL;
 
 namespace Coon.NeuQuant
 {
-    class Spacing : IComparable<Spacing>
+    class Spacing
     {
-        public double spacing;
-        public double theoSpacing;
-        public double maxIntensity;
-        public int charge;
-        public bool light;
-        public bool heavy;
-        public double MZ;
+        public string Sequence;
+        public double RetentionTime;
+        public int Charge;
+        public int NumLabels;
+        public int Isotope;
+        public double LightInt;
+        public double HeavyInt;
+        public double LightMZ;
+        public double HeavyMZ;
+        public double TheoSpacingDa;
+        public double TheoSpacingTh;
+        public double SpacingDa;
+        public double SpacingTh;
 
-        public Spacing(MZPeak light, MZPeak heavy, int charge)
+        public Spacing(string sequence, double retentionTime, int charge, int numLabels, int isotope, PeptideID peptide, ILabeledPeak light, ILabeledPeak heavy = null)
         {
-            spacing = (heavy.MZ - light.MZ) * (double)charge;
+            Sequence = sequence;
+            RetentionTime = retentionTime;
+            Charge = charge;
+            NumLabels = numLabels;
+            Isotope = isotope;
+            TheoSpacingDa = peptide.spacingMassRange[1,0].Mean;
+            TheoSpacingTh = TheoSpacingDa / Charge;
 
-            if (heavy.Intensity >= light.Intensity)
+            if (light != null)
             {
-                maxIntensity = heavy.Intensity;
-                this.heavy = true;
+                LightInt = light.Y;
+                LightMZ = light.X;
+            }
+
+            if (heavy != null)
+            {
+                HeavyInt = heavy.Y;
+                HeavyMZ = heavy.X;
+
+                SpacingDa = Mass.MassFromMz(HeavyMZ, Charge) - Mass.MassFromMz(LightMZ, Charge);
+                SpacingTh = HeavyMZ - LightMZ;
             }
             else
             {
-                maxIntensity = light.Intensity;
-                this.light = true;
+                HeavyInt = 0;
+                HeavyMZ = 0;
+
+                SpacingDa = 0.0;
+                SpacingTh = 0.0;
             }
-        }
-
-        public Spacing(double exp, double theo, int z, double light, double heavy)
-        {
-            spacing = exp;
-            theoSpacing = theo;
-            charge = z;
-            MZ = (light + heavy) * 0.5;
-        }
-
-        public Spacing()
-        {
-            spacing = double.NaN;
-            maxIntensity = double.NaN;
-        }
-
-        public int CompareTo(Spacing other)
-        {
-            int comp = this.spacing.CompareTo(other.spacing);
-            return comp;
         }
     }
 }
