@@ -7,7 +7,7 @@ using CSMSL;
 
 namespace Coon.NeuQuant
 {
-    class PrecursorPPM : IComparable<PrecursorPPM>
+    public class PrecursorPPM : IComparable<PrecursorPPM>
     {
         public int Charge { get; set; }
         public string Peptide { get; set; }

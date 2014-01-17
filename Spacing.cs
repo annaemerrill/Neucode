@@ -9,7 +9,7 @@ using CSMSL;
 
 namespace Coon.NeuQuant
 {
-    class Spacing
+    public class Spacing
     {
         public string Sequence;
         public double RetentionTime;
@@ -24,8 +24,11 @@ namespace Coon.NeuQuant
         public double TheoSpacingTh;
         public double SpacingDa;
         public double SpacingTh;
+        public int ScanNumber;
+        public double Log10SummedIntensity;
+        public double SpacingMTh;
 
-        public Spacing(string sequence, double retentionTime, int charge, int numLabels, int isotope, PeptideID peptide, ILabeledPeak light, ILabeledPeak heavy = null)
+        public Spacing(string sequence, double retentionTime, int scanNumber, int charge, int numLabels, int isotope, PeptideID peptide, ILabeledPeak light, ILabeledPeak heavy = null)
         {
             Sequence = sequence;
             RetentionTime = retentionTime;
@@ -34,6 +37,7 @@ namespace Coon.NeuQuant
             Isotope = isotope;
             TheoSpacingDa = peptide.spacingMassRange[1,0].Mean;
             TheoSpacingTh = TheoSpacingDa / Charge;
+            ScanNumber = scanNumber;
 
             if (light != null)
             {
@@ -48,6 +52,8 @@ namespace Coon.NeuQuant
 
                 SpacingDa = Mass.MassFromMz(HeavyMZ, Charge) - Mass.MassFromMz(LightMZ, Charge);
                 SpacingTh = HeavyMZ - LightMZ;
+                SpacingMTh = SpacingTh * 1000.0;
+                Log10SummedIntensity = Math.Log10(LightInt + HeavyInt);
             }
             else
             {

@@ -29,7 +29,7 @@
     <MapFileExtensions>true</MapFileExtensions>
     <ProductName>NeuQuant</ProductName>
     <PublisherName>CoonWare</PublisherName>
-    <ApplicationRevision>48</ApplicationRevision>
+    <ApplicationRevision>78</ApplicationRevision>
     <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
     <UseApplicationTrust>false</UseApplicationTrust>
     <PublishWizardCompleted>true</PublishWizardCompleted>
@@ -109,6 +109,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="CoalescenceCheck.cs" />
+    <Compile Include="FileSummarySet.cs" />
     <Compile Include="Form1.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -116,10 +117,14 @@
       <DependentUpon>Form1.cs</DependentUpon>
     </Compile>
     <Compile Include="IsotopePair.cs" />
+    <Compile Include="Label.cs" />
+    <Compile Include="LabelType.cs" />
     <Compile Include="MessageEventArgs.cs" />
     <Compile Include="NeuCodeMZPeak.cs" />
     <Compile Include="NonQuantifiableType.cs" />
+    <Compile Include="OMSSAPeptideID.cs" />
     <Compile Include="Pair.cs" />
+    <Compile Include="ParameterSet.cs" />
     <Compile Include="PeakPattern.cs" />
     <Compile Include="PeptideID.cs" />
     <Compile Include="PeptideSpectralMatch.cs" />

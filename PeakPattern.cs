@@ -18,17 +18,14 @@ namespace Coon.NeuQuant
                 int peakCount = 0;
                 if (PatternPairs != null)
                 {
-                    foreach (Pair pair in PatternPairs)
+                    foreach (IsotopePair isotopePair in PatternPairs)
                     {
                         for (int i = 0; i < ParentPeptide.numChannels; i++)
                         {
-                            for (int j = 0; j < ParentPeptide.numIsotopes; j++)
+                            if (isotopePair.ChannelPeaks[i] != null)
                             {
-                                if (pair.peaks[i, j] != null)
-                                {
-                                    peakCount++;
-                                    score += pair.peaks[i, j].GetSignalToNoise() * (2 - j / 2);
-                                }
+                                peakCount++;
+                                score += isotopePair.ChannelPeaks[i].GetSignalToNoise() * (2 - isotopePair.Isotope / 2);
                             }
                         }
                     }
@@ -39,7 +36,7 @@ namespace Coon.NeuQuant
         }
         public double NormalizedScore { set; get; }
         public PeptideID ParentPeptide;
-        public List<Pair> PatternPairs { set; get; }
+        public List<IsotopePair> PatternPairs { set; get; }
         int PairCount
         {
             get
@@ -49,17 +46,17 @@ namespace Coon.NeuQuant
             }
         }
 
-        public PeakPattern(int numPeaks, int patternID, PeptideID parentPeptide, Pair pair = null)
+        public PeakPattern(int numPeaks, int patternID, PeptideID parentPeptide, IsotopePair isotopePair = null)
         {
             NumPeaks = numPeaks;
             PatternID = patternID;
             ParentPeptide = parentPeptide;
 
-            PatternPairs = new List<Pair>();
+            PatternPairs = new List<IsotopePair>();
 
-            if (pair != null)
+            if (isotopePair != null)
             {
-                PatternPairs.Add(pair);
+                PatternPairs.Add(isotopePair);
             }
 
         }

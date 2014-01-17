@@ -12,56 +12,111 @@ using CSMSL.IO.Thermo;
 
 namespace Coon.NeuQuant
 {
-    class PeptideID
+    public class PeptideID
     {
         // Constants
         //public static MassTolerance SILAC = new MassTolerance(MassToleranceType.PPM, 20.0); // Individual SILAC peak tolerance (for lower resolution MS1 scans)
         //public static MassTolerance NEUCODE = new MassTolerance(MassToleranceType.PPM, 10.0); // Individual NeuCode peak tolerance (for higher resolution MS1 scans)
-        public static double INTENSITYCUTOFF = 1.0 / (2.0 * Math.E); // Intensity threshold for quantitation filtering to eliminate low-level peaks
-        public static double SIGNALTONOISE = Form1.MINIMUMSN;
-        public static double QUANTRESOLUTION = Form1.QUANTRESOLUTION * 1000.0;
-        public static double QUANTSEPARATION = Form1.THEORETICALSEPARATION;
-        public static double SPACINGPERCENTAGEERROR = 0.50;
-        public static MassTolerance TOLERANCE = new MassTolerance(MassToleranceType.PPM, (Form1.TOLERANCE * 2.0)); // User-specified ppm tolerance
+        public static double INTENSITYCUTOFF = 1.0 / Math.E; // Intensity threshold for quantitation filtering to eliminate low-level peaks
+        public static double SPACINGPERCENTAGEERROR = 0.20;
 
+        // User-specified tolerances
+        public double minSignalToNoise
+        {
+            get
+            {
+                return Form1.MINIMUMSN;
+            }
+        }
+        public double maxRawIntensity
+        {
+            get
+            {
+                if (Form1.MAXIMUMNL > 0)
+                {
+                    return Form1.MAXIMUMNL * 1000000.0;
+                }
+                else
+                {
+                    return double.PositiveInfinity;
+                }                
+            }
+        }
+        public double quantResolution
+        {
+            get
+            {
+                if (Form1.FUSION)
+                {
+                    return Form1.QUANTRESOLUTION * 1000.0 / Math.Sqrt(2.0);
+                }
+                else
+                {
+                    return Form1.QUANTRESOLUTION * 1000.0;
+                }
+            }
+        }            
+        public double quantSeparation 
+        {
+            get
+            {
+                return Form1.THEORETICALSEPARATION;
+            }
+        }
+            
+        public MassTolerance ppmTolerance 
+        {
+            get
+            {
+                return new MassTolerance(MassToleranceType.PPM, Form1.TOLERANCE);
+            }
+        }
+            
         // Class members
         // Experimental design information
         public int numChannels; // # of total channels in the experiment (# clusters * # isotopologues)
         public int numIsotopes; // # of isotopes to include
         public int numClusters; // # of clusters
         public int numIsotopologues; // # of isotopologues within each cluster
+        public int numPeptideVersions { get; set; }
         
         // Identification information
         public Dictionary<MSDataFile, List<PeptideSpectralMatch>> PSMs; // Organizes a peptide's PSMs based on raw file
         public PeptideSpectralMatch PSM; // A peptide's first PSM
         public Dictionary<MSDataFile, PeptideSpectralMatch> bestPSMs;
-        public PeptideSpectralMatch bestPSM
-        {
-            get
-            {
-                PeptideSpectralMatch best = null;
-                if (bestPSMs.Count > 0)
-                {
-                    foreach (PeptideSpectralMatch psm in bestPSMs.Values)
-                    {
-                        if (best == null || psm.EValue < best.EValue) best = psm;
-                    }
-                }
-                return best;
-            }
-        }
-        public int numIsotopologueLabels; // The number of quantitative labels carried by the peptide
-        public int numClusterLabels;
-        public int numLabels
-        {
-            get
-            {
-                if (numIsotopologues > 1) return numIsotopologueLabels;
-                else return numClusterLabels;
-            }
-        }
+        public PeptideSpectralMatch bestPSM;
+        //{
+        //    get
+        //    {
+        //        PeptideSpectralMatch best = null;
+        //        if (bestPSMs.Count > 0)
+        //        {
+        //            foreach (PeptideSpectralMatch psm in bestPSMs.Values)
+        //            {
+        //                if (best == null || psm.EValue < best.EValue) best = psm;
+        //            }
+
+        //            //if (numIsotopologues > 1) best = maximizeResolvability();
+        //        }
+        //        return best;
+        //    }
+        //}
+        //public int numIsotopologueLabels; // The number of quantitative labels carried by the peptide
+        //public int numClusterLabels;
+        //public int numLabels
+        //{
+        //    get
+        //    {
+        //        if (numIsotopologues > 1) return numIsotopologueLabels;
+        //        else return numClusterLabels;
+        //    }
+        //}
+        public bool clusterLabel;
+        public bool isotopologueLabel;
+        public bool labeled;
         public string sequence; // A peptide's sequence
-        public string sequenceNoMods; 
+        public string sequenceNoMods;
+        public string sequenceItoL;
         public string scanNumbers
         {
             get
@@ -90,7 +145,9 @@ namespace Coon.NeuQuant
                         }
                     } //End for every raw file
                 }
-                return scanNumbers;
+
+                scanNumbers = "\"" + scanNumbers + "\"";
+                return scanNumbers.ToString();
             }
         } // All the scan numbers that produced PSMs
         public string rawFiles
@@ -104,7 +161,7 @@ namespace Coon.NeuQuant
                     {
                         if (i != PSMs.Count() - 1)
                         {
-                            rawFiles += PSMs.ElementAt(i).Key + ";";
+                            rawFiles += PSMs.ElementAt(i).Key + ":";
                         }
                         else
                         {
@@ -112,7 +169,8 @@ namespace Coon.NeuQuant
                         }
                     }
                 }
-                return rawFiles;
+                rawFiles = "\"" + rawFiles + "\"";
+                return rawFiles.ToString();
             }
         } // All the raw files that produced PSMs
         public string chargeStates
@@ -122,19 +180,29 @@ namespace Coon.NeuQuant
                 string chargeStates = "";
                 if (PSMs != null && PSMs.Count > 0)
                 {
-                    for (int i = 0; i < PSMs.Count; i++)
+                    foreach (MSDataFile rawFile in PSMs.Keys) //For every raw file
                     {
-                        if (i != PSMs.Count() - 1)
+                        List<PeptideSpectralMatch> psms = PSMs[rawFile];
+                        foreach (PeptideSpectralMatch PSM in psms) //For every PSM
                         {
-                            chargeStates += PSMs.ElementAt(i).Value[0].Charge + ";";
-                        }
-                        else
+                            if (psms.ElementAt(psms.Count - 1) == PSM)
+                            {
+                                chargeStates += PSM.Charge;
+                            }
+                            else
+                            {
+                                chargeStates += PSM.Charge + ",";
+                            }
+                        } //End for every PSM
+
+                        if (PSMs.Keys.ElementAt(PSMs.Keys.Count - 1) != rawFile)
                         {
-                            chargeStates += PSMs.ElementAt(i).Value[0].Charge;
+                            chargeStates += ";";
                         }
-                    }
+                    } //End for every raw file
                 }
-                return chargeStates;
+                chargeStates = "\"" + chargeStates + "\"";
+                return chargeStates.ToString();
             }
         } // All the charge states that produced PSMs
         public double[,] theoMasses; // Theoretical masses of each peptide isotopologue 
@@ -157,14 +225,14 @@ namespace Coon.NeuQuant
                 double[,] adjustedPrecursorMasses = new double[channels, numIsotopes];
                 if (ppmError != 0)
                 {
-                    for (int i = 0; i < channels; i++)
+                    for (int i = 0; i < numPeptideVersions; i++)
                     {
                         for (int j = 0; j < numIsotopes; j++)
                         {
                             if (theoMasses[i, 0] > 0)
                             {
                                 adjustedMass = ((theoMasses[i, 0] * ppmError) / 1000000.0) + theoMasses[i, 0];
-                                adjustedPrecursorMasses[i, j] = adjustedMass + (double)j * (Constants.CARBON13 - Constants.CARBON);
+                                adjustedPrecursorMasses[i, j] = adjustedMass + (double)j * (Constants.Carbon13 - Constants.Carbon);
                             }
                             else
                             {
@@ -175,12 +243,12 @@ namespace Coon.NeuQuant
                 }
                 else
                 {
-                    for (int i = 0; i < channels; i++)
+                    for (int i = 0; i < numPeptideVersions; i++)
                     {
                         for (int j = 0; j < numIsotopes; j++)
                         {
                             adjustedMass = theoMasses[i, 0];
-                            adjustedPrecursorMasses[i, j] = adjustedMass + (double)j * (Constants.CARBON13 - Constants.CARBON);
+                            adjustedPrecursorMasses[i, j] = adjustedMass + (double)j * (Constants.Carbon13 - Constants.Carbon);
                         }
                     }
                 }
@@ -197,7 +265,7 @@ namespace Coon.NeuQuant
                 if (bestPSM != null)
                 {
                     int charge = bestPSM.Charge;
-                    if (numIsotopologues > 1)
+                    if (numIsotopologues > 1 && isotopologueLabel)
                     {
                         averageTheoMZ = new double[numClusters];
                         for (int c = 0; c < numClusters; c++)
@@ -222,7 +290,14 @@ namespace Coon.NeuQuant
                         averageTheoMZ = new double[numChannels];
                         for (int i = 0; i < numChannels; i++)
                         {
-                            averageTheoMZ[i] = Mass.MzFromMass(theoMasses[i, 0], charge);
+                            if (numChannels > numPeptideVersions && i >= numPeptideVersions)
+                            {
+                                averageTheoMZ[i] = 0.0;
+                            }
+                            else
+                            {
+                                averageTheoMZ[i] = Mass.MzFromMass(theoMasses[i, 0], charge);
+                            }
                         }
                         return averageTheoMZ;
                     }
@@ -243,18 +318,21 @@ namespace Coon.NeuQuant
                         averageAdjustedTheoMZ = new double[numClusters];
                         for (int c = 0; c < numClusters; c++)
                         {
-                            int channelIndex = c * numIsotopologues;
+                            if (averageTheoMZ[c] > 0)
+                            {
+                                int channelIndex = c * numIsotopologues;
 
-                            double avgAdjTheoMass;
-                            if (numIsotopologues % 2 == 0)
-                            {
-                                avgAdjTheoMass = (adjustedTheoMasses[channelIndex + ((numIsotopologues / 2) - 1), 0] + adjustedTheoMasses[channelIndex + (numIsotopologues / 2), 0]) / 2.0;
+                                double avgAdjTheoMass;
+                                if (numIsotopologues % 2 == 0)
+                                {
+                                    avgAdjTheoMass = (adjustedTheoMasses[channelIndex + ((numIsotopologues / 2) - 1), 0] + adjustedTheoMasses[channelIndex + (numIsotopologues / 2), 0]) / 2.0;
+                                }
+                                else
+                                {
+                                    avgAdjTheoMass = adjustedTheoMasses[channelIndex + (numIsotopologues / 2), 0];
+                                }
+                                averageAdjustedTheoMZ[c] = Mass.MzFromMass(avgAdjTheoMass, charge);
                             }
-                            else
-                            {
-                                avgAdjTheoMass = adjustedTheoMasses[channelIndex + (numIsotopologues / 2), 0];
-                            }
-                            averageAdjustedTheoMZ[c] = Mass.MzFromMass(avgAdjTheoMass, charge);
                         }
                         return averageAdjustedTheoMZ;
                     }
@@ -263,7 +341,10 @@ namespace Coon.NeuQuant
                         averageAdjustedTheoMZ = new double[numChannels];
                         for (int i = 0; i < numChannels; i++)
                         {
-                            averageAdjustedTheoMZ[i] = Mass.MzFromMass(adjustedTheoMasses[i, 0], charge);
+                            if (averageTheoMZ[i] > 0)
+                            {
+                                averageAdjustedTheoMZ[i] = Mass.MzFromMass(adjustedTheoMasses[i, 0], charge);
+                            }
                         }
                         return averageAdjustedTheoMZ;
                     }
@@ -284,15 +365,25 @@ namespace Coon.NeuQuant
                     if (numIsotopologues < 2)
                     {
                         numPeaks = numChannels / 2;
+                        //if (numChannels == 3) numPeaks = 2;
+                    }
+                    else if (numIsotopologues > 1 && Form1.CROSSCLUSTERQUANT)
+                    {
+                        numPeaks = numChannels / 2;
                     }
                     else
                     {
                         numPeaks = numIsotopologues / 2;
+                        //if (numIsotopologues == 3) numPeaks = 2;
                     }
                 }
                 else
                 {
                     if (numIsotopologues < 2)
+                    {
+                        numPeaks = numChannels;
+                    }
+                    else if (numIsotopologues > 1 && Form1.CROSSCLUSTERQUANT)
                     {
                         numPeaks = numChannels;
                     }
@@ -324,16 +415,12 @@ namespace Coon.NeuQuant
         {
             get
             {
-                double[,] max = null;
-                List<Pair> pairsCombined;
-                List<Pair> intensitySortedPairs;
+                double[,] max = new double[numChannels, 2];
+                List<Pair> pairsCombined = new List<Pair>();
+                List<Pair> intensitySortedPairs = new List<Pair>();
 
                 if (allPairs != null && allPairs.Count > 0)
                 {
-                    max = new double[numChannels, 2];
-                    pairsCombined = new List<Pair>();
-                    intensitySortedPairs = new List<Pair>();
-
                     foreach (List<Pair> pairList in allPairs.Values)
                     {
                         foreach (Pair pair in pairList)
@@ -341,37 +428,47 @@ namespace Coon.NeuQuant
                             pairsCombined.Add(pair);
                         }
                     }
-
-                    for (int i = 0; i < numChannels; i++)
+                }
+                if (completePairs != null && completePairs.Count > 0)
+                {
+                    foreach (List<Pair> pairList in completePairs.Values)
                     {
-                        intensitySortedPairs = pairsCombined.OrderByDescending(channelPair => channelPair.GetMaxChannelIntensity(i)).Take(5).ToList();
-                        switch (intensitySortedPairs.Count)
+                        foreach (Pair pair in pairList)
                         {
-                            case 0:
-                                max[i, 0] = 0;
-                                max[i, 1] = 0;
-                                break;
-                            case 1:
-                                max[i, 0] = intensitySortedPairs[0].GetMaxChannelIntensity(i);
-                                max[i, 1] = intensitySortedPairs[0].retentionTime;
-                                break;
-                            case 2:
-                                max[i, 0] = (intensitySortedPairs[0].GetMaxChannelIntensity(i) + intensitySortedPairs[1].GetMaxChannelIntensity(i)) / 2.0;
-                                max[i, 1] = intensitySortedPairs[0].retentionTime;
-                                break;
-                            case 3:
-                                max[i, 0] = intensitySortedPairs[1].GetMaxChannelIntensity(i);
-                                max[i, 1] = intensitySortedPairs[0].retentionTime;
-                                break;
-                            case 4:
-                                max[i, 0] = (intensitySortedPairs[1].GetMaxChannelIntensity(i) + intensitySortedPairs[2].GetMaxChannelIntensity(i)) / 2.0;
-                                max[i, 1] = intensitySortedPairs[0].retentionTime;
-                                break;
-                            case 5:
-                                max[i, 0] = intensitySortedPairs[2].GetMaxChannelIntensity(i);
-                                max[i, 1] = intensitySortedPairs[0].retentionTime;
-                                break;
+                            pairsCombined.Add(pair);
                         }
+                    }
+                }           
+
+                for (int i = 0; i < numChannels; i++)
+                {
+                    intensitySortedPairs = pairsCombined.OrderByDescending(channelPair => channelPair.GetMaxChannelIntensity(i)).Take(5).ToList();
+                    switch (intensitySortedPairs.Count)
+                    {
+                        case 0:
+                            max[i, 0] = 0;
+                            max[i, 1] = 0;
+                            break;
+                        case 1:
+                            max[i, 0] = intensitySortedPairs[0].GetMaxChannelIntensity(i);
+                            max[i, 1] = intensitySortedPairs[0].RetentionTime;
+                            break;
+                        case 2:
+                            max[i, 0] = (intensitySortedPairs[0].GetMaxChannelIntensity(i) + intensitySortedPairs[1].GetMaxChannelIntensity(i)) / 2.0;
+                            max[i, 1] = intensitySortedPairs[0].RetentionTime;
+                            break;
+                        case 3:
+                            max[i, 0] = intensitySortedPairs[1].GetMaxChannelIntensity(i);
+                            max[i, 1] = intensitySortedPairs[0].RetentionTime;
+                            break;
+                        case 4:
+                            max[i, 0] = (intensitySortedPairs[1].GetMaxChannelIntensity(i) + intensitySortedPairs[2].GetMaxChannelIntensity(i)) / 2.0;
+                            max[i, 1] = intensitySortedPairs[0].RetentionTime;
+                            break;
+                        case 5:
+                            max[i, 0] = intensitySortedPairs[2].GetMaxChannelIntensity(i);
+                            max[i, 1] = intensitySortedPairs[0].RetentionTime;
+                            break;
                     }
                 }
                 return max;
@@ -410,23 +507,23 @@ namespace Coon.NeuQuant
                                 break;
                             case 1:
                                 max[i, 0] = intensitySortedPairs[0].GetMaxChannelIntensity(i);
-                                max[i, 1] = intensitySortedPairs[0].retentionTime;
+                                max[i, 1] = intensitySortedPairs[0].RetentionTime;
                                 break;
                             case 2:
                                 max[i, 0] = (intensitySortedPairs[0].GetMaxChannelIntensity(i) + intensitySortedPairs[1].GetMaxChannelIntensity(i)) / 2.0;
-                                max[i, 1] = intensitySortedPairs[0].retentionTime;
+                                max[i, 1] = intensitySortedPairs[0].RetentionTime;
                                 break;
                             case 3:
                                 max[i, 0] = intensitySortedPairs[1].GetMaxChannelIntensity(i);
-                                max[i, 1] = intensitySortedPairs[0].retentionTime;
+                                max[i, 1] = intensitySortedPairs[0].RetentionTime;
                                 break;
                             case 4:
                                 max[i, 0] = (intensitySortedPairs[1].GetMaxChannelIntensity(i) + intensitySortedPairs[2].GetMaxChannelIntensity(i)) / 2.0;
-                                max[i, 1] = intensitySortedPairs[0].retentionTime;
+                                max[i, 1] = intensitySortedPairs[0].RetentionTime;
                                 break;
                             case 5:
                                 max[i, 0] = intensitySortedPairs[2].GetMaxChannelIntensity(i);
-                                max[i, 1] = intensitySortedPairs[0].retentionTime;
+                                max[i, 1] = intensitySortedPairs[0].RetentionTime;
                                 break;
                         }
                     }
@@ -527,38 +624,48 @@ namespace Coon.NeuQuant
         {
             get
             {
-                double[,] max = null;
-                List<Pair> pairsCombined;
-                List<Pair> intensitySortedPairs;
+                double[,] max = new double[numChannels, 2];
+                List<Pair> pairsCombined = new List<Pair>();
+                List<Pair> intensitySortedPairs = new List<Pair>();
 
-                if (allPairs != null && allPairs.Count > 0)
+                if (completePairs != null && completePairs.Count > 0)
                 {
-                    max = new double[numChannels, 2];
-                    pairsCombined = new List<Pair>();
-                    intensitySortedPairs = new List<Pair>();
-
-                    foreach (List<Pair> pairList in allPairs.Values)
+                    foreach (List<Pair> pairList in completePairs.Values)
                     {
                         foreach (Pair pair in pairList)
                         {
                             pairsCombined.Add(pair);
                         }
                     }
+                }
 
-                    for (int i = 0; i < numChannels; i++)
+                if (pairsCombined.Count == 0)
+                {
+                    if (allPairs != null && allPairs.Count > 0)
                     {
-                        intensitySortedPairs = pairsCombined.OrderByDescending(channelPair => channelPair.GetMaxChannelIntensity(i)).Take(1).ToList();
-                        switch (intensitySortedPairs.Count)
+                        foreach (List<Pair> pairList in allPairs.Values)
                         {
-                            case 0:
-                                max[i, 0] = 0;
-                                max[i, 1] = 0;
-                                break;
-                            case 1:
-                                max[i, 0] = intensitySortedPairs[0].GetMaxChannelIntensity(i);
-                                max[i, 1] = intensitySortedPairs[0].retentionTime;
-                                break;
+                            foreach (Pair pair in pairList)
+                            {
+                                pairsCombined.Add(pair);
+                            }
                         }
+                    }
+                }
+
+                for (int i = 0; i < numChannels; i++)
+                {
+                    intensitySortedPairs = pairsCombined.OrderByDescending(channelPair => channelPair.GetMaxChannelIntensity(i)).Take(1).ToList();
+                    switch (intensitySortedPairs.Count)
+                    {
+                        case 0:
+                            max[i, 0] = 0;
+                            max[i, 1] = 0;
+                            break;
+                        case 1:
+                            max[i, 0] = intensitySortedPairs[0].GetMaxChannelIntensity(i);
+                            max[i, 1] = intensitySortedPairs[0].RetentionTime;
+                            break;
                     }
                 }
                 return max;
@@ -597,7 +704,7 @@ namespace Coon.NeuQuant
                                 break;
                             case 1:
                                 max[i, 0] = intensitySortedPairs[0].GetMaxChannelIntensity(i);
-                                max[i, 1] = intensitySortedPairs[0].retentionTime;
+                                max[i, 1] = intensitySortedPairs[0].RetentionTime;
                                 break;
                         }
                     }
@@ -607,12 +714,182 @@ namespace Coon.NeuQuant
         }
         public double[,] completeTotalIntensity; // Keeps track of each channel's total intensity considering only complete pairs
         public double[,] totalIntensity; // Keeps track of each channel's total intensity considering all pairs
+        public double[] medianCompleteTotalIntensity;
+        public double[] medianTotalIntensity;
         public MassTolerance firstSearchMassRange; // The mass range used to search for peaks for systematic error determination
-        public double[,] heavyToLightRatioSum; // Computes the quantitative ratio between channels
+        public double[] heavyToLightRatioSum; // Computes the quantitative ratio between channels
+        public double[,] heavyToLightRatioMedian;
         public Dictionary<MSDataFile, List<Pair>> allPairs;
+        public List<double>[,] channelMZValues
+        {
+            get
+            {
+                List<double>[,] MZ = new List<double>[numChannels, numIsotopes];
+
+                for (int c = 0; c < numChannels; c++)
+                {
+                    for (int i = 0; i < numIsotopes; i++)
+                    {
+                        MZ[c, i] = new List<double>();
+                    }
+                }
+
+                foreach (List<Pair> pairList in completePairs.Values)
+                {
+                    foreach (Pair pair in pairList)
+                    {
+                        foreach (IsotopePair isotopePair in pair.IsotopePairs)
+                        {
+                            if (isotopePair != null)
+                            {
+                                for (int c = 0; c < numChannels; c++)
+                                {
+                                    if (isotopePair.ChannelPeaks[c] != null)
+                                    {
+                                        MZ[c, isotopePair.Isotope].Add(isotopePair.ChannelPeaks[c].X);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                bool[,] completePairFound = new bool[numChannels, numIsotopes];
+
+                for (int c = 0; c < numChannels; c++)
+                {
+                    for (int i = 0; i < numIsotopes; i++)
+                    {
+                        completePairFound[c, i] = false;
+                        if (MZ[c, i].Count > 0) completePairFound[c, i] = true;
+                    }
+                }
+
+                foreach (List<Pair> pairList in allPairs.Values)
+                {
+                    foreach (Pair pair in pairList)
+                    {
+                        foreach (IsotopePair isotopePair in pair.IsotopePairs)
+                        {
+                            if (isotopePair != null)
+                            {
+                                for (int c = 0; c < numChannels; c++)
+                                {
+                                    if (isotopePair.ChannelPeaks[c] != null && !completePairFound[c, isotopePair.Isotope])
+                                    {
+                                        MZ[c, isotopePair.Isotope].Add(isotopePair.ChannelPeaks[c].X);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                for (int c = 0; c < numChannels; c++)
+                {
+                    for (int i = 0; i < numIsotopes; i++)
+                    {
+                        MZ[c, i].Sort();
+                    }
+                }
+
+                return MZ;
+            }
+        }
+        public Chromatogram[,] channelXICs
+        {
+            get
+            {
+                Chromatogram[,] XICs = new Chromatogram[numChannels, numIsotopes];
+                for (int c = 0; c < numChannels; c++)
+                {
+                    for (int i = 0; i < numIsotopes; i++)
+                    {
+                        XICs[c, i] = fullScanList.GetChromatogram(ChromatogramType.MzRange, channelXICRange[c, i]); 
+                    }
+                }
+                return XICs;
+            }
+        }
+        public double[,] averageChannelMZ
+        {
+            get
+            {
+                double[,] averageMZ = new double[numChannels, numIsotopes];
+                for (int c = 0; c < numChannels; c++)
+                {
+                    for (int i = 0; i < numIsotopes; i++)
+                    {
+                        List<double> mZList = channelMZValues[c, i];
+                        double total = 0.0;
+                        int count = 0;
+                        foreach (double MZ in mZList)
+                        {
+                            total += MZ;
+                            count++;
+                        }
+                        averageMZ[c, i] = total / count;
+                    }
+                }
+                return averageMZ;
+            }
+        }
+        public MassTolerance[,] channelDeviationPPM
+        {
+            get
+            {
+                MassTolerance[,] stdDevPPM = new MassTolerance[numChannels, numIsotopes];
+                for (int c = 0; c < numChannels; c++)
+                {
+                    for (int i = 0; i < numIsotopes; i++)
+                    {
+                        List<double> mZList = channelMZValues[c, i];
+                        double averageMZ = averageChannelMZ[c, i];
+                        double numerator = 0.0;
+                        int denominator = mZList.Count - 1;
+                        foreach (double MZ in mZList)
+                        {
+                            numerator += Math.Pow(MZ - averageMZ, 2);
+                        }
+                        double stdDev = Math.Sqrt(numerator / denominator);
+                        stdDevPPM[c, i] = new MassTolerance(MassToleranceType.PPM, (stdDev * 2000000) / averageMZ);
+                    }
+                }
+                return stdDevPPM;
+            }
+        }
+        public MassRange[,] channelXICRange
+        {
+            get
+            {
+                MassRange[,] channelXICs = new MassRange[numChannels, numIsotopes];
+                for (int c = 0; c < numChannels; c++)
+                {
+                    for (int i = 0; i < numIsotopes; i++)
+                    {
+                        if (averageChannelMZ[c, i] > 0)
+                        {
+                            if (channelDeviationPPM[c, i].Value > 0.0)
+                            {
+                                channelXICs[c, i] = new MassRange(averageChannelMZ[c, i], channelDeviationPPM[c, i]);
+                            }
+                            else
+                            {
+                                channelXICs[c, i] = new MassRange(averageChannelMZ[c, i], new MassTolerance(MassToleranceType.PPM, 2.0));
+                            }
+                        }
+                        else
+                        {
+                            double adjustedTheoMZ = Mass.MzFromMass(adjustedTheoMasses[c, i], bestPSM.Charge);
+                            channelXICs[c, i] = new MassRange(adjustedTheoMZ, new MassTolerance(MassToleranceType.PPM, 2.0));
+                        }
+                    }
+                }
+                return channelXICs;
+            }
+        }
         public int countAllPairs
         {
-            set { }
             get
             {
                 int count = 0;
@@ -622,7 +899,7 @@ namespace Coon.NeuQuant
                     {
                         foreach (Pair pair in allPairs[rawFile])
                         {
-                            if (pair != null && pair.totalPeakCount > 0)
+                            if (pair != null && pair.IsotopePairs.Count > 0)
                             {
                                 count++;
                             }
@@ -634,36 +911,23 @@ namespace Coon.NeuQuant
         }
         public int[] countAllIsotopes
         {
-            set { }
             get
             {
                 int[] count = null;
-                int channelCount;
-                int channelIndex;
-                if (allPairs != null && allPairs.Count > 0)
+                if (numIsotopologues > 1 && numClusters > 1)
                 {
-                    if (numIsotopologues > 1)
+                    if (allPairs != null && allPairs.Count > 0)
                     {
                         count = new int[numClusters];
-                        foreach (MSDataFile rawFile in allPairs.Keys)
+                        foreach (List<Pair> pairs in allPairs.Values)
                         {
-                            List<Pair> pairs = allPairs[rawFile];
                             foreach (Pair pair in pairs)
                             {
                                 for (int c = 0; c < numClusters; c++)
                                 {
-                                    for (int j = 0; j < numIsotopes; j++)
+                                    foreach (IsotopePair isotopePair in pair.IsotopePairs)
                                     {
-                                        channelCount = 0;
-                                        channelIndex = c * numIsotopologues;
-                                        for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
-                                        {
-                                            if (pair.peaks[i, j] != null)
-                                            {
-                                                channelCount++;
-                                            }
-                                        }
-                                        if (channelCount >= peaksNeeded)
+                                        if (isotopePair.PeakCountByCluster[c] >= peaksNeeded)
                                         {
                                             count[c]++;
                                         }
@@ -672,25 +936,19 @@ namespace Coon.NeuQuant
                             }
                         }
                     }
-                    else
+                }
+                else
+                {
+                    if (allPairs != null && allPairs.Count > 0)
                     {
                         count = new int[1];
-                        foreach (MSDataFile rawFile in allPairs.Keys)
+                        foreach (List<Pair> pairs in allPairs.Values)
                         {
-                            List<Pair> pairs = allPairs[rawFile];
                             foreach (Pair pair in pairs)
                             {
-                                for (int j = 0; j < numIsotopes; j++)
+                                foreach (IsotopePair isotopePair in pair.IsotopePairs)
                                 {
-                                    channelCount = 0;
-                                    for (int i = 0; i < numChannels; i++)
-                                    {
-                                        if (pair.peaks[i, j] != null)
-                                        {
-                                            channelCount++;
-                                        }
-                                    }
-                                    if (channelCount >= peaksNeeded)
+                                    if (isotopePair.PeakCountByCluster[0] >= peaksNeeded)
                                     {
                                         count[0]++;
                                     }
@@ -705,7 +963,6 @@ namespace Coon.NeuQuant
         public Dictionary<MSDataFile, List<Pair>> completePairs;
         public int countCompletePairs
         {
-            set { }
             get
             {
                 int count = 0;
@@ -715,49 +972,58 @@ namespace Coon.NeuQuant
                     {
                         foreach (Pair pair in completePairs[rawFile])
                         {
-                            if (pair != null && pair.totalPeakCount > 0)
+                            if (pair != null && pair.IsotopePairs.Count > 0)
                             {
                                 count++;
                             }
                         }
                     }
-                    return count;
                 }
                 return count;
             }
         }
         public int[] countCompleteIsotopes
         {
-            set { }
             get
             {
                 int[] count = null;
-                int channelCount;
-                int channelIndex;
-                if (completePairs != null && completePairs.Count > 0)
+                if (numIsotopologues > 1 && numClusters > 1)
                 {
-                    count = new int[numClusters];
-                    foreach (MSDataFile rawFile in completePairs.Keys)
+                    if (completePairs != null && completePairs.Count > 0)
                     {
-                        List<Pair> pairs = completePairs[rawFile];
-                        foreach (Pair pair in pairs)
+                        count = new int[numClusters];
+                        foreach (List<Pair> pairs in completePairs.Values)
                         {
-                            for (int c = 0; c < numClusters; c++)
+                            foreach (Pair pair in pairs)
                             {
-                                for (int j = 0; j < numIsotopes; j++)
+                                for (int c = 0; c < numClusters; c++)
                                 {
-                                    channelCount = 0;
-                                    channelIndex = c * numIsotopologues;
-                                    for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+                                    foreach (IsotopePair isotopePair in pair.IsotopePairs)
                                     {
-                                        if (pair.peaks[i, j] != null)
+                                        if (isotopePair.PeakCountByCluster[c] >= peaksNeeded)
                                         {
-                                            channelCount++;
+                                            count[c]++;
                                         }
                                     }
-                                    if (channelCount == numIsotopologues)
+                                }
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    if (completePairs != null && completePairs.Count > 0)
+                    {
+                        count = new int[1];
+                        foreach (List<Pair> pairs in completePairs.Values)
+                        {
+                            foreach (Pair pair in pairs)
+                            {
+                                foreach (IsotopePair isotopePair in pair.IsotopePairs)
+                                {
+                                    if (isotopePair.PeakCountByCluster[0] >= peaksNeeded)
                                     {
-                                        count[c]++;
+                                        count[0]++;
                                     }
                                 }
                             }
@@ -776,9 +1042,8 @@ namespace Coon.NeuQuant
             {
                 MassRange[,] spacing;
                 double theoSpacing;
-                double modificationSpacing;
 
-                if (numIsotopologues > 1 && numIsotopologueLabels > 0)
+                if (numIsotopologues > 1 && isotopologueLabel)
                 {
                     spacing = new MassRange[numIsotopologues, numIsotopologues];
                     theoSpacing = 0;
@@ -790,16 +1055,15 @@ namespace Coon.NeuQuant
                             if (r == c) spacing[r, c] = null;
                             else
                             {
-                                modificationSpacing = Form1.ISOTOPOLOGUELABELS[r].Mass.Monoisotopic - Form1.ISOTOPOLOGUELABELS[c].Mass.Monoisotopic;
-                                theoSpacing = (double)numIsotopologueLabels * modificationSpacing;
+                                theoSpacing = theoMasses[r,0] - theoMasses[c,0];
                                 if (theoSpacing < 0) theoSpacing = theoSpacing * -1.0;
-                                spacing[r, c] = new MassRange(theoSpacing, new MassTolerance(MassToleranceType.DA, SPACINGPERCENTAGEERROR * theoSpacing));
+                                spacing[r, c] = new MassRange(theoSpacing - (2 * (SPACINGPERCENTAGEERROR / 2) * theoSpacing), theoSpacing + (1 * (SPACINGPERCENTAGEERROR / 2) * theoSpacing));
                             }
                         }     
                     }
                     return spacing;
                 }
-                else if (numIsotopologues < 2 && numClusterLabels > 0)
+                else if (numIsotopologues < 2 && clusterLabel)
                 {
                     spacing = new MassRange[numChannels, numChannels];
                     theoSpacing = 0;
@@ -809,24 +1073,33 @@ namespace Coon.NeuQuant
                         for (int c = 0; c < numChannels; c++)
                         {
                             if (r == c) spacing[r, c] = null;
-                            else if (r == 0)
-                            {
-                                theoSpacing = 0 - ((double)numClusterLabels * Form1.CLUSTERLABELS[c - 1].Mass.Monoisotopic);
-                                if (theoSpacing < 0) theoSpacing = theoSpacing * -1.0;
-                                spacing[r, c] = new MassRange(theoSpacing, new MassTolerance(MassToleranceType.DA, 0.020 * numClusterLabels));
-                            }
-                            else if (c == 0)
-                            {
-                                theoSpacing = ((double)numClusterLabels * Form1.CLUSTERLABELS[r - 1].Mass.Monoisotopic) - 0;
-                                if (theoSpacing < 0) theoSpacing = theoSpacing * -1.0;
-                                spacing[r, c] = new MassRange(theoSpacing, new MassTolerance(MassToleranceType.DA, 0.020 * numClusterLabels));
-                            }
                             else
                             {
-                                theoSpacing = (double)numClusterLabels * (Form1.CLUSTERLABELS[r - 1].Mass.Monoisotopic - Form1.CLUSTERLABELS[c - 1].Mass.Monoisotopic);
+                                theoSpacing = theoMasses[r,0] - theoMasses[c,0];
                                 if (theoSpacing < 0) theoSpacing = theoSpacing * -1.0;
-                                spacing[r, c] = new MassRange(theoSpacing, new MassTolerance(MassToleranceType.DA, 0.020 * numClusterLabels));
+                                spacing[r, c] = new MassRange(theoSpacing, new MassTolerance(MassToleranceType.DA, 0.01 * theoSpacing));
                             }
+                            
+                            
+                            //if (r == c) spacing[r, c] = null;
+                            //else if (r == 0)
+                            //{
+                            //    theoSpacing = 0 - ((double)numClusterLabels * Form1.CLUSTERLABELS[c - 1].MonoisotopicMass);
+                            //    if (theoSpacing < 0) theoSpacing = theoSpacing * -1.0;
+                            //    spacing[r, c] = new MassRange(theoSpacing, new MassTolerance(MassToleranceType.DA, 0.020 * numClusterLabels));
+                            //}
+                            //else if (c == 0)
+                            //{
+                            //    theoSpacing = ((double)numClusterLabels * Form1.CLUSTERLABELS[r - 1].MonoisotopicMass) - 0;
+                            //    if (theoSpacing < 0) theoSpacing = theoSpacing * -1.0;
+                            //    spacing[r, c] = new MassRange(theoSpacing, new MassTolerance(MassToleranceType.DA, 0.020 * numClusterLabels));
+                            //}
+                            //else
+                            //{
+                            //    theoSpacing = (double)numClusterLabels * (Form1.CLUSTERLABELS[r - 1].MonoisotopicMass - Form1.CLUSTERLABELS[c - 1].MonoisotopicMass);
+                            //    if (theoSpacing < 0) theoSpacing = theoSpacing * -1.0;
+                            //    spacing[r, c] = new MassRange(theoSpacing, new MassTolerance(MassToleranceType.DA, 0.020 * numClusterLabels));
+                            //}
                         }
                     }
                     return spacing;
@@ -974,7 +1247,7 @@ namespace Coon.NeuQuant
             {
                 if (numIsotopologues < 2)
                 {
-                    if (numLabels > 0) return true;
+                    if (clusterLabel) return true;
                     else return false;
                 }
                 else
@@ -990,6 +1263,44 @@ namespace Coon.NeuQuant
                 }
             }
         }
+        public bool allClustersResolvable
+        {
+            get
+            {
+                if (numIsotopologues < 2)
+                {
+                    if (clusterLabel) return true;
+                    else return false;
+                }
+                else
+                {
+                    for (int i = 0; i < numClusters; i++)
+                    {
+                        if (!GetTheoreticalResolvability(i))
+                        {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+            }
+        }
+        public int channelsDetected
+        {
+            get
+            {
+                if (noQuantReason == NonQuantifiableType.Quantified)
+                {
+                    if (quantifiedNoiseIncluded[0]) return 1;
+                    else
+                    {
+                        return numChannels;
+                    }
+                }
+                else return 0;
+            }
+        }
+        public double[] theoreticalIsotopicDistribution;
 
         // Coalescence information
         public bool coalescenceDetected;
@@ -997,8 +1308,23 @@ namespace Coon.NeuQuant
         public Dictionary<int, List<double>> missingChannelsSN;
 
         // Creates a PeptideID based on a database search peptide identification
-        public PeptideID(int scanNumber, int charge, double eValue, string sequenceOriginal, MSDataFile rawFile, string mods)
-        {           
+        public PeptideID(int scanNumber, int charge, double eValue, string sequenceOriginal, MSDataFile rawFile, string mods, string fileNameID)
+        {
+            string[] modifications = mods.Split(',');
+            bool[] lysinePTM = new bool[modifications.Length];
+            int[] lysineSites = new int[modifications.Length];
+            if (Form1.ACETYLATION || Form1.UBIQUITIN && mods.Length > 1)
+            {
+                for (int m = 0; m < modifications.Length; m++)
+                {
+                    lysineSites[m] = int.Parse(modifications[m].Split(':')[1]);
+                    if (modifications[m].ToLower().Contains("acetyl") || modifications[m].ToLower().Contains("ubiquit"))
+                    {
+                        lysinePTM[m] = true;
+                    }
+                }
+            }
+            
             // Local variables
             List<PeptideSpectralMatch> psms;
             Peptide peptide;
@@ -1009,12 +1335,35 @@ namespace Coon.NeuQuant
             for (int i = 0; i < sequenceOriginal.Length; i++)
             {
                 if (sequenceOriginal[i].Equals('l')) sequenceFixed += 'L';
-                else if (sequenceOriginal[i].Equals('k') && !mods.Contains("q")) sequenceFixed += 'K';
+                else if (sequenceOriginal[i].Equals('r')) sequenceFixed += 'R';
+                else if (sequenceOriginal[i].Equals('k'))
+                {
+                    bool lysineSiteFound = false;
+                    int count = 0;
+                    while (!lysineSiteFound && count < lysineSites.Length)
+                    {
+                        for (int n = 0; n < lysineSites.Length; n++)
+                        {
+                            if (lysineSites[n] == i + 1 && lysinePTM[n]) lysineSiteFound = true;
+                            count++;
+                        }
+                    }
+                    if (!lysineSiteFound) sequenceFixed += 'K';
+                    else sequenceFixed += 'k';
+                }
                 else sequenceFixed += sequenceOriginal[i];
             }
             
             // Initialize all peptide properties
             sequence = sequenceFixed;
+            if (sequence.Contains('I'))
+            {
+                sequenceItoL = sequence.Replace('I', 'L');
+            }
+            else
+            {
+                sequenceItoL = sequence;
+            }
             numChannels = Form1.NUMCHANNELS;
             numIsotopes = Form1.NUMISOTOPES;
             numIsotopologues = Form1.NUMISOTOPOLOGUES;
@@ -1025,6 +1374,7 @@ namespace Coon.NeuQuant
             List<int> oxidationPositions = new List<int>();
             List<int> phosphorylationPositions = new List<int>();
             List<int> tyrosineNHSPositions = new List<int>();
+            List<int> kAcPositions = new List<int>();
             List<int> kGGPositions = new List<int>();
             for (int i = 0; i < sequence.Length; i++)
             {
@@ -1046,7 +1396,7 @@ namespace Coon.NeuQuant
                 else if (sequence[i].Equals('y'))
                 {
                     sequenceNoMods += 'Y';
-                    if (Form1.NHSCLUSTER)
+                    if (Form1.LABELSPERCHANNEL[0][0].LabelType.HasFlag(LabelType.NHS))
                     {
                         tyrosineNHSPositions.Add(i);
                     }
@@ -1058,7 +1408,14 @@ namespace Coon.NeuQuant
                 else if (sequence[i].Equals('k'))
                 {
                     sequenceNoMods += 'K';
-                    kGGPositions.Add(i);
+                    if (Form1.ACETYLATION)
+                    {
+                        kAcPositions.Add(i);
+                    }
+                    else if (Form1.UBIQUITIN)
+                    {
+                        kGGPositions.Add(i);
+                    }
                 }   
                 else
                 {
@@ -1068,6 +1425,9 @@ namespace Coon.NeuQuant
 
             peptide = new Peptide(sequenceNoMods);
             peptide.SetModification(NamedChemicalFormula.Carbamidomethyl, 'C');
+
+            setTheoreticalIsotopicDistribution();
+
             if (oxidationPositions.Count > 0)
             {
                 foreach (int position in oxidationPositions)
@@ -1090,281 +1450,481 @@ namespace Coon.NeuQuant
             //missingChannelsSN.Add(4, new List<double>());
 
             // Set number of labels and search range for PPM correction
-            if (numIsotopologues > 1)
-            {
-                if (Form1.NHSISOTOPOLOGUE)
-                {
-                    numIsotopologueLabels = countResidues('K', peptide.Sequence) + 1 + tyrosineNHSPositions.Count;
-                    firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 50.0);
-                }
-                else if (Form1.LEUISOTOPOLOGUE)
-                {
-                    numIsotopologueLabels = countResidues('L', peptide.Sequence);
-                    firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 50.0);
-                }
-                else
-                {
-                    numIsotopologueLabels = countResidues('K', peptide.Sequence);
-                    firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 50.0);
+            //if (numIsotopologues > 1)
+            //{
+            //    firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 50.0);
+            //    if (Form1.NHSISOTOPOLOGUE)
+            //    {
+            //        numIsotopologueLabels = countResidues('K', peptide.Sequence) + 1 + tyrosineNHSPositions.Count;
+            //        firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 50.0);
+            //    }
+            //    else if (Form1.LEUISOTOPOLOGUE)
+            //    {
+            //        numIsotopologueLabels = countResidues('L', peptide.Sequence);
+            //        firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 50.0);
+            //    }
+            //    else
+            //    {
+            //        numIsotopologueLabels = countResidues('K', peptide.Sequence);
+            //        firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 50.0);
 
-                    if (numClusters > 1)
-                    {
-                        if (Form1.NHSCLUSTER)
-                        {
-                            numClusterLabels = countResidues('K', peptide.Sequence) + 1 + tyrosineNHSPositions.Count;
-                        }
-                    }
-                }
-            }
-            else
-            {
-                if (Form1.LEUCLUSTER)
-                {
-                    numClusterLabels = countResidues('L', peptide.Sequence);
-                    firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 50.0);
-                }
-                else if (Form1.CYSCLUSTER)
-                {
-                    numClusterLabels = countResidues('C', peptide.Sequence);
-                    firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 50.0);
-                }
-                else if (Form1.ARGCLUSTER)
-                {
-                    numClusterLabels = countResidues('R', peptide.Sequence);
-                    firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 50.0);
-                }
-                else if (Form1.NHSCLUSTER)
-                {
-                    numClusterLabels = countResidues('K', peptide.Sequence) + 1 + tyrosineNHSPositions.Count;
-                    firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 50.0);
-                }
-                else
-                {
-                    numClusterLabels = countResidues('K', peptide.Sequence);
-                    firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 50.0);
-                }
-            }
+            //        if (numClusters > 1 || (numClusters == 1 && Form1.CLUSTERLABELS.Count > 0))
+            //        {
+            //            if (Form1.NHSCLUSTER)
+            //            {
+            //                numClusterLabels = countResidues('K', peptide.Sequence) + 1 + tyrosineNHSPositions.Count;
+            //            }
+            //        }
+            //    }
+            //}
+            //else
+            //{
+            //    if (Form1.LEUCLUSTER)
+            //    {
+            //        numClusterLabels = countResidues('L', peptide.Sequence);
+            //        firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 50.0);
+            //    }
+            //    else if (Form1.CYSCLUSTER)
+            //    {
+            //        numClusterLabels = countResidues('C', peptide.Sequence);
+            //        firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 50.0);
+            //    }
+            //    else if (Form1.ARGCLUSTER)
+            //    {
+            //        numClusterLabels = countResidues('R', peptide.Sequence);
+            //        firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 50.0);
+            //    }
+            //    else if (Form1.NHSCLUSTER)
+            //    {
+            //        numClusterLabels = countResidues('K', peptide.Sequence) + 1 + tyrosineNHSPositions.Count;
+            //        firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 50.0);
+            //    }
+            //    else if (Form1.LYSCLUSTER)
+            //    {
+            //        numClusterLabels = countResidues('K', peptide.Sequence);
+            //        firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 50.0);
+            //    }
+            //    else
+            //    {
+            //        numClusterLabels = 1;
+            //        firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 50.0);
+            //    }
+            //}
 
-            theoMasses = new double[numChannels, 1];
+            //theoMasses = new double[numChannels, 1];
 
             // Initialize all identification data members
             PSMs = new Dictionary<MSDataFile, List<PeptideSpectralMatch>>();
             PSMs.Add(rawFile, new List<PeptideSpectralMatch>());
-            PSM = new PeptideSpectralMatch(scanNumber, charge, eValue);
+            PSM = new PeptideSpectralMatch(scanNumber, rawFile, charge, eValue, fileNameID);
             PSMs.TryGetValue(rawFile, out psms);
             psms.Add(PSM);
             bestPSMs = new Dictionary<MSDataFile, PeptideSpectralMatch>();
             bestPSMs.Add(rawFile, PSM);
+            firstSearchMassRange = new MassTolerance(MassToleranceType.PPM, 50.0);
             
             // Initialize all quantitation data members
             completeTotalIntensity = new double[numChannels, numIsotopes + 1];
             totalIntensity = new double[numChannels, numIsotopes + 1];
             if (numIsotopologues > 1)
             {
-                heavyToLightRatioSum = new double[(numIsotopologues - 1) * numClusters, 1];
+                heavyToLightRatioSum = new double[(numIsotopologues - 1) * numClusters];
+                heavyToLightRatioMedian = new double[(numIsotopologues - 1) * numClusters, 1];
             }
             else
             {
-                heavyToLightRatioSum = new double[(numChannels - 1), 1];
+                heavyToLightRatioSum = new double[(numChannels - 1)];
+                heavyToLightRatioMedian = new double[numChannels - 1, 1];
             }
             allPairs = new Dictionary<MSDataFile, List<Pair>>();
             allPairs.Add(rawFile, new List<Pair>());
             completePairs = new Dictionary<MSDataFile, List<Pair>>();
             completePairs.Add(rawFile, new List<Pair>());
             missingChannelPattern = new int[numClusters, 2];
-            int numPeptideVersions;
-            
-            // Set theoretical masses of each channel
-            if (numIsotopologues > 1 && numIsotopologueLabels > 0)
+            numPeptideVersions = 1;
+
+            peptideVersions = new Peptide[numChannels];
+            theoMasses = new double[numChannels, 1];
+
+            for (int i = 0; i < numChannels; i++)
             {
-                if (numClusters > 1)
+                peptideVersions[i] = new Peptide(peptide);
+
+                if (phosphorylationPositions.Count > 0)
                 {
-                    if (numClusterLabels > 0) numPeptideVersions = numIsotopologues * numClusters;
-                    else numPeptideVersions = numIsotopologues;
+                    foreach (int position in phosphorylationPositions)
+                    {
+                        peptideVersions[i].SetModification(NamedChemicalFormula.Phosphorylation, position + 1);
+                    }
+                }
+                foreach (Label label in Form1.LABELSPERCHANNEL[i])
+                {
+                    peptideVersions[i].SetModification(label.LabelModification, label.LabelSites);
+
+                    if (tyrosineNHSPositions.Count > 0 && label.LabelType.HasFlag(LabelType.NHS) && label.LabelSites.HasFlag(ModificationSites.NPep))
+                    {
+                        foreach (int position in tyrosineNHSPositions)
+                        {
+                            peptideVersions[i].SetModification(label.LabelModification, position + 1);
+                        }
+                    }
+
+                    if (kAcPositions.Count > 0 && label.LabelType.HasFlag(LabelType.AminoAcid) && label.LabelSites.HasFlag(ModificationSites.K))
+                    {
+                        foreach (int position in kAcPositions)
+                        {
+                            peptideVersions[i].SetModification(new Mass(label.LabelModification.MonoisotopicMass + NamedChemicalFormula.Acetyl.MonoisotopicMass), position + 1);
+                        }
+                    }
+
+                    if (kGGPositions.Count > 0 && label.LabelType.HasFlag(LabelType.AminoAcid) && label.LabelSites.HasFlag(ModificationSites.K))
+                    {
+                        foreach (int position in kGGPositions)
+                        {
+                            peptideVersions[i].SetModification(new Mass(label.LabelModification.MonoisotopicMass + 114.0429), position + 1);
+                        }
+                    }
+                }
+                theoMasses[i, 0] = peptideVersions[i].MonoisotopicMass;
+                if (i > 0 && theoMasses[i,0] > theoMasses[i-1,0]) numPeptideVersions++;
+            }
+
+            if (numIsotopologues < 2)
+            {
+                isotopologueLabel = false;
+                if (numPeptideVersions > 1)
+                {
+                    clusterLabel = true;
+                    labeled = true;
                 }
                 else
                 {
-                    numPeptideVersions = numIsotopologues;
+                    clusterLabel = false;
+                    labeled = false;
                 }
-                peptideVersions = new Peptide[numPeptideVersions];
                 
-                for (int i = 0; i < numPeptideVersions; i++)
-                {
-                    peptideVersions[i] = new Peptide(peptide);
-                }
-
-                if ((numClusters == 1 && Form1.CLUSTERLABELS.Count == 0) || numClusterLabels == 0)
-                {
-                    for (int i = 0; i < Form1.ISOTOPOLOGUELABELS.Count; i++)
-                    {
-                        if (Form1.LYSISOTOPOLOGUE)
-                        {
-                            peptideVersions[i].SetModification(Form1.ISOTOPOLOGUELABELS[i], ModificationSites.K);
-
-                            if (kGGPositions.Count > 0)
-                            {
-                                foreach (int position in kGGPositions)
-                                {
-                                    peptideVersions[i].SetModification(new Mass(Form1.ISOTOPOLOGUELABELS[i].Mass.Monoisotopic + 114.0429), position + 1);
-                                }
-                            }
-                        }
-                        else if (Form1.LEUISOTOPOLOGUE)
-                        {
-                            peptideVersions[i].SetModification(Form1.ISOTOPOLOGUELABELS[i], ModificationSites.L);
-
-                            if (kGGPositions.Count > 0)
-                            {
-                                foreach (int position in kGGPositions)
-                                {
-                                    peptideVersions[i].SetModification(new Mass(114.0429), position + 1);
-                                }
-                            }
-                        }
-                        else if (Form1.NHSISOTOPOLOGUE)
-                        {
-                            peptideVersions[i].SetModification(Form1.ISOTOPOLOGUELABELS[i], ModificationSites.NPep | ModificationSites.K);
-
-                            if (tyrosineNHSPositions.Count > 0)
-                            {
-                                foreach (int position in tyrosineNHSPositions)
-                                {
-                                    peptideVersions[i].SetModification(Form1.ISOTOPOLOGUELABELS[i], position);
-                                }
-                            }
-                        }
-                    }
-                }
-
-                else if (numClusters > 2)
-                {
-                    int channelIndex;
-
-                    for (int c = 0; c < numClusters; c++)
-                    {
-                        channelIndex = c * numIsotopologues;
-                        for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
-                        {
-                            if (Form1.ARGCLUSTER)
-                            {
-                                if (c > 0)
-                                {
-                                    peptideVersions[i].SetModification(Form1.CLUSTERLABELS[c - 1], ModificationSites.R);
-                                }
-                                    
-                                if (Form1.LYSISOTOPOLOGUE)
-                                {
-                                    peptideVersions[i].SetModification(Form1.ISOTOPOLOGUELABELS[i], ModificationSites.K);
-
-                                    if (kGGPositions.Count > 0)
-                                    {
-                                        foreach (int position in kGGPositions)
-                                        {
-                                            peptideVersions[i].SetModification(new Mass(Form1.ISOTOPOLOGUELABELS[i].Mass.Monoisotopic + 114.0429), position + 1);
-                                        }
-                                    }
-                                }
-                                else if (Form1.LEUISOTOPOLOGUE)
-                                {
-                                    peptideVersions[i].SetModification(Form1.ISOTOPOLOGUELABELS[i], ModificationSites.L);
-
-                                    if (kGGPositions.Count > 0)
-                                    {
-                                        foreach (int position in kGGPositions)
-                                        {
-                                            peptideVersions[i].SetModification(new Mass(114.0429), position + 1);
-                                        }
-                                    }
-                                }
-                            }
-                            else if (Form1.LEUCLUSTER)
-                            {
-                                if (c > 0)
-                                {
-                                    peptideVersions[i].SetModification(Form1.CLUSTERLABELS[c - 1], ModificationSites.L);
-                                }
-                                    
-                                if (Form1.LYSISOTOPOLOGUE)
-                                {
-                                    peptideVersions[i].SetModification(Form1.ISOTOPOLOGUELABELS[i], ModificationSites.K);
-
-                                    if (kGGPositions.Count > 0)
-                                    {
-                                        foreach (int position in kGGPositions)
-                                        {
-                                            peptideVersions[i].SetModification(new Mass(Form1.ISOTOPOLOGUELABELS[i].Mass.Monoisotopic + 114.0429), position + 1);
-                                        }
-                                    }
-                                }
-                            }
-                            else if (Form1.NHSCLUSTER)
-                            {
-                                peptideVersions[i].SetModification(Form1.CLUSTERLABELS[c], ModificationSites.NPep);
-                                peptideVersions[i].SetModification(Form1.ISOTOPOLOGUELABELS[i], ModificationSites.K);
-
-                                if (tyrosineNHSPositions.Count > 0)
-                                {
-                                    foreach (int position in tyrosineNHSPositions)
-                                    {
-                                        peptideVersions[i].SetModification(Form1.CLUSTERLABELS[c], position);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
             }
-            else if (numIsotopologues < 2 && numClusterLabels > 0)
+            else
             {
-                numPeptideVersions = numClusters;
-                peptideVersions = new Peptide[numPeptideVersions];
-
-                for (int i = 0; i < numPeptideVersions; i++)
+                if (numPeptideVersions > 1)
                 {
-                    peptideVersions[i] = new Peptide(peptide);
-                }
-
-                for (int i = 0; i < Form1.CLUSTERLABELS.Count; i++)
-                {
-                    if (Form1.LYSCLUSTER)
+                    if (numClusters > 1)
                     {
-                        peptideVersions[i + 1].SetModification(Form1.CLUSTERLABELS[i], ModificationSites.K);
-                    }
-                    else if (Form1.ARGCLUSTER)
-                    {
-                        peptideVersions[i + 1].SetModification(Form1.CLUSTERLABELS[i], ModificationSites.R);
-                    }
-                    else if (Form1.LEUCLUSTER)
-                    {
-                        peptideVersions[i + 1].SetModification(Form1.CLUSTERLABELS[i], ModificationSites.L);
-                    }
-                    else if (Form1.CYSCLUSTER)
-                    {
-                        peptideVersions[i + 1].SetModification(Form1.CLUSTERLABELS[i], ModificationSites.L);
-                    }
-                    else if (Form1.NHSCLUSTER)
-                    {
-                        peptideVersions[i].SetModification(Form1.CLUSTERLABELS[i], ModificationSites.NPep | ModificationSites.K);
-                        
-                        if (tyrosineNHSPositions.Count > 0)
+                        if (numPeptideVersions == numChannels)
                         {
-                            foreach (int position in tyrosineNHSPositions)
-                            {
-                                peptideVersions[i].SetModification(Form1.CLUSTERLABELS[i], position);
-                            }
+                            isotopologueLabel = true;
+                            clusterLabel = true;
+                            labeled = true;
                         }
-                    
+                        else if (numPeptideVersions == numClusters)
+                        {
+                            isotopologueLabel = false;
+                            clusterLabel = true;
+                            labeled = true;
+                        }
+                        else if (numPeptideVersions == numIsotopologues)
+                        {
+                            isotopologueLabel = true;
+                            clusterLabel = false;
+                            labeled = true;
+                        }
+                    }
+                    else
+                    {
+                        clusterLabel = false;
+                        isotopologueLabel = true;
+                        labeled = true;
+
                     }
                 }
-            }
-
-            if (peptideVersions != null)
-            {
-                for (int i = 0; i < peptideVersions.Length; i++)
+                else
                 {
-                    theoMasses[i, 0] = peptideVersions[i].Mass.Monoisotopic;
+                    isotopologueLabel = false;
+                    clusterLabel = false;
+                    labeled = false;
                 }
             }
+            
+            //// Set theoretical masses of each channel
+            //if (numIsotopologueLabels == 0 && numIsotopologues > 1)
+            //{
+            //    numPeptideVersions = 1;
+            //    peptideVersions = new Peptide[numPeptideVersions];
+            //    peptideVersions[0] = new Peptide(peptide);
+            //    if (Form1.CLUSTERLABELS.Count > 0)
+            //    {
+            //        peptideVersions[0].SetModification(Form1.CLUSTERLABELS[0], ModificationSites.NPep);   
+            //    }
+            //}
+            //else if (numIsotopologues > 1 && numIsotopologueLabels > 0)
+            //{
+            //    if (numClusters > 1)
+            //    {
+            //        if (numClusterLabels > 0) numPeptideVersions = numIsotopologues * numClusters;
+            //        else numPeptideVersions = numIsotopologues;
+            //    }
+            //    else
+            //    {
+            //        numPeptideVersions = numIsotopologues;
+            //    }
+            //    peptideVersions = new Peptide[numPeptideVersions];
+                
+            //    for (int i = 0; i < numPeptideVersions; i++)
+            //    {
+            //        peptideVersions[i] = new Peptide(peptide);
+            //    }
+
+            //    if ((numClusters == 1 && Form1.CLUSTERLABELS.Count == 0) || numClusterLabels == 0)
+            //    {
+            //        for (int i = 0; i < Form1.ISOTOPOLOGUELABELS.Count; i++)
+            //        {
+            //            if (Form1.LYSISOTOPOLOGUE)
+            //            {
+            //                peptideVersions[i].SetModification(Form1.ISOTOPOLOGUELABELS[i], ModificationSites.K);
+
+            //                if (kGGPositions.Count > 0)
+            //                {
+            //                    foreach (int position in kGGPositions)
+            //                    {
+            //                        peptideVersions[i].SetModification(new Mass(Form1.ISOTOPOLOGUELABELS[i].MonoisotopicMass + 114.0429), position + 1);
+            //                    }
+            //                }
+            //                else if (kAcPositions.Count > 0)
+            //                {
+            //                    foreach (int position in kAcPositions)
+            //                    {
+            //                        peptideVersions[i].SetModification(new Mass(Form1.ISOTOPOLOGUELABELS[i].MonoisotopicMass + 42.0106), position + 1);
+            //                    }
+            //                }
+            //            }
+            //            else if (Form1.LEUISOTOPOLOGUE)
+            //            {
+            //                peptideVersions[i].SetModification(Form1.ISOTOPOLOGUELABELS[i], ModificationSites.L);
+
+            //                if (kGGPositions.Count > 0)
+            //                {
+            //                    foreach (int position in kGGPositions)
+            //                    {
+            //                        peptideVersions[i].SetModification(new Mass(114.0429), position + 1);
+            //                    }
+            //                }
+            //                else if (kAcPositions.Count > 0)
+            //                {
+            //                    foreach (int position in kAcPositions)
+            //                    {
+            //                        peptideVersions[i].SetModification(new Mass(42.0106), position + 1);
+            //                    }
+            //                }
+            //            }
+            //            else if (Form1.NHSISOTOPOLOGUE)
+            //            {
+            //                peptideVersions[i].SetModification(Form1.ISOTOPOLOGUELABELS[i], ModificationSites.NPep | ModificationSites.K);
+
+            //                if (tyrosineNHSPositions.Count > 0)
+            //                {
+            //                    foreach (int position in tyrosineNHSPositions)
+            //                    {
+            //                        peptideVersions[i].SetModification(Form1.ISOTOPOLOGUELABELS[i], position + 1);
+            //                    }
+            //                }
+            //            }
+            //        }
+            //    }
+            //    else if (numClusters == 1)
+            //    {
+            //        for (int i = 0; i < Form1.ISOTOPOLOGUELABELS.Count; i++)
+            //        {
+            //            if (Form1.LYSISOTOPOLOGUE)
+            //            {
+            //                peptideVersions[i].SetModification(Form1.ISOTOPOLOGUELABELS[i], ModificationSites.K);
+            //                peptideVersions[i].SetModification(Form1.CLUSTERLABELS[0], ModificationSites.NPep);
+
+            //                if (tyrosineNHSPositions.Count > 0)
+            //                {
+            //                    foreach (int position in tyrosineNHSPositions)
+            //                    {
+            //                        peptideVersions[i].SetModification(Form1.CLUSTERLABELS[0], position + 1);
+            //                    }
+            //                }
+            //                else if (kGGPositions.Count > 0)
+            //                {
+            //                    foreach (int position in kGGPositions)
+            //                    {
+            //                        peptideVersions[i].SetModification(new Mass(Form1.ISOTOPOLOGUELABELS[i].MonoisotopicMass + 114.0429), position + 1);
+            //                    }
+            //                }
+            //                else if (kAcPositions.Count > 0)
+            //                {
+            //                    foreach (int position in kAcPositions)
+            //                    {
+            //                        peptideVersions[i].SetModification(new Mass(Form1.ISOTOPOLOGUELABELS[i].MonoisotopicMass + 42.0106), position + 1);
+            //                    }
+            //                }
+            //            }
+            //        }
+            //    }
+
+            //    else if (numClusters > 2)
+            //    {
+            //        int channelIndex;
+
+            //        for (int c = 0; c < numClusters; c++)
+            //        {
+            //            channelIndex = c * numIsotopologues;
+            //            for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+            //            {
+            //                if (Form1.ARGCLUSTER)
+            //                {
+            //                    if (c > 0)
+            //                    {
+            //                        peptideVersions[i].SetModification(Form1.CLUSTERLABELS[c - 1], ModificationSites.R);
+            //                    }
+
+            //                    if (Form1.LYSISOTOPOLOGUE)
+            //                    {
+            //                        peptideVersions[i].SetModification(Form1.ISOTOPOLOGUELABELS[i], ModificationSites.K);
+
+            //                        if (kGGPositions.Count > 0)
+            //                        {
+            //                            foreach (int position in kGGPositions)
+            //                            {
+            //                                peptideVersions[i].SetModification(new Mass(Form1.ISOTOPOLOGUELABELS[i].MonoisotopicMass + 114.0429), position + 1);
+            //                            }
+            //                        }
+            //                        else if (kAcPositions.Count > 0)
+            //                        {
+            //                            foreach (int position in kAcPositions)
+            //                            {
+            //                                peptideVersions[i].SetModification(new Mass(Form1.ISOTOPOLOGUELABELS[i].MonoisotopicMass + 42.0106), position + 1);
+            //                            }
+            //                        }
+            //                    }
+            //                    else if (Form1.LEUISOTOPOLOGUE)
+            //                    {
+            //                        peptideVersions[i].SetModification(Form1.ISOTOPOLOGUELABELS[i], ModificationSites.L);
+
+            //                        if (kGGPositions.Count > 0)
+            //                        {
+            //                            foreach (int position in kGGPositions)
+            //                            {
+            //                                peptideVersions[i].SetModification(new Mass(114.0429), position + 1);
+            //                            }
+            //                        }
+            //                        else if (kAcPositions.Count > 0)
+            //                        {
+            //                            foreach (int position in kAcPositions)
+            //                            {
+            //                                peptideVersions[i].SetModification(new Mass(42.0106), position + 1);
+            //                            }
+            //                        }
+            //                    }
+            //                }
+            //                else if (Form1.LEUCLUSTER)
+            //                {
+            //                    if (c > 0)
+            //                    {
+            //                        peptideVersions[i].SetModification(Form1.CLUSTERLABELS[c - 1], ModificationSites.L);
+            //                    }
+
+            //                    if (Form1.LYSISOTOPOLOGUE)
+            //                    {
+            //                        peptideVersions[i].SetModification(Form1.ISOTOPOLOGUELABELS[i], ModificationSites.K);
+
+            //                        if (kGGPositions.Count > 0)
+            //                        {
+            //                            foreach (int position in kGGPositions)
+            //                            {
+            //                                peptideVersions[i].SetModification(new Mass(Form1.ISOTOPOLOGUELABELS[i].MonoisotopicMass + 114.0429), position + 1);
+            //                            }
+            //                        }
+            //                        else if (kAcPositions.Count > 0)
+            //                        {
+            //                            foreach (int position in kAcPositions)
+            //                            {
+            //                                peptideVersions[i].SetModification(new Mass(Form1.ISOTOPOLOGUELABELS[i].MonoisotopicMass + 42.0106), position + 1);
+            //                            }
+            //                        }
+            //                    }
+            //                }
+            //                else if (Form1.NHSCLUSTER)
+            //                {
+            //                    peptideVersions[i].SetModification(Form1.CLUSTERLABELS[c], ModificationSites.NPep);
+            //                    peptideVersions[i].SetModification(Form1.ISOTOPOLOGUELABELS[i], ModificationSites.K);
+
+            //                    if (tyrosineNHSPositions.Count > 0)
+            //                    {
+            //                        foreach (int position in tyrosineNHSPositions)
+            //                        {
+            //                            peptideVersions[i].SetModification(Form1.CLUSTERLABELS[c], position);
+            //                        }
+            //                    }
+            //                }
+            //            }
+            //        }
+            //    }
+            //}
+            //else if (numIsotopologues < 2 && numClusterLabels > 0)
+            //{
+            //    numPeptideVersions = numClusters;
+            //    peptideVersions = new Peptide[numPeptideVersions];
+
+            //    for (int i = 0; i < numPeptideVersions; i++)
+            //    {
+            //        peptideVersions[i] = new Peptide(peptide);
+            //    }
+
+            //    for (int i = 0; i < Form1.CLUSTERLABELS.Count; i++)
+            //    {
+            //        if (Form1.LYSCLUSTER)
+            //        {
+            //            peptideVersions[i].SetModification(Form1.CLUSTERLABELS[i], ModificationSites.K);
+            //        }
+            //        else if (Form1.ARGCLUSTER)
+            //        {
+            //            peptideVersions[i + 1].SetModification(Form1.CLUSTERLABELS[i], ModificationSites.R);
+            //        }
+            //        else if (Form1.LEUCLUSTER)
+            //        {
+            //            peptideVersions[i + 1].SetModification(Form1.CLUSTERLABELS[i], ModificationSites.L);
+            //        }
+            //        else if (Form1.CYSCLUSTER)
+            //        {
+            //            peptideVersions[i + 1].SetModification(Form1.CLUSTERLABELS[i], ModificationSites.L);
+            //        }
+            //        else if (Form1.NHSCLUSTER)
+            //        {
+            //            peptideVersions[i].SetModification(Form1.CLUSTERLABELS[i], ModificationSites.NPep | ModificationSites.K);
+
+            //            if (tyrosineNHSPositions.Count > 0)
+            //            {
+            //                foreach (int position in tyrosineNHSPositions)
+            //                {
+            //                    peptideVersions[i].SetModification(Form1.CLUSTERLABELS[i], position);
+            //                }
+            //            }
+
+            //        }
+            //        else
+            //        {
+            //            peptideVersions[i + 1].SetModification(Form1.CLUSTERLABELS[i], peptideVersions[i + 1].Length - 1);
+            //        }
+            //    }
+            //}
+            //else
+            //{
+            //    peptideVersions = new Peptide[numPeptideVersions];
+            //    peptideVersions[0] = new Peptide(peptide);
+            //}
+
+            //theoMasses = new double[numPeptideVersions, 1];
+
+            //if (peptideVersions != null)
+            //{
+            //    for (int i = 0; i < peptideVersions.Length; i++)
+            //    {
+            //        theoMasses[i, 0] = peptideVersions[i].MonoisotopicMass;
+            //    }
+            //}
                 
                 // Duplex NeuCode (metabolic)
                 //if (Form1.NEUCODE_DUPLEX_LYS8_36MDA || Form1.NEUCODE_DUPLEX_LYS1_6MDA || Form1.NEUCODE_DUPLEX_LEU7_18MDA)
@@ -2045,13 +2605,7 @@ namespace Coon.NeuQuant
                 if (largest != null)
                 {
                     //int peakCharge = 0;
-                    //// Ignore any peak with a known charge state that is incorrect
-                    //if (largest.Charge != charge)
-                    //{
-                    //    MSDataScan previous = rawFile[currentScan.SpectrumNumber - 1];
-                    //    peakCharge = findLowerResolutionCharge(largest, previous);
-                    //}
-                    
+                    //// Ignore any peak with a known charge state that is incorrect                    
                     if (largest.Charge > 0 && largest.Charge != charge) 
                     {
                         largest = null;
@@ -2145,49 +2699,73 @@ namespace Coon.NeuQuant
 
         public void maximizeResolvability()
         {
+            PeptideSpectralMatch best = null;
             foreach (KeyValuePair<MSDataFile, List<PeptideSpectralMatch>> psmSet in PSMs)
             {
                 List<PeptideSpectralMatch> psms = psmSet.Value;
-                PeptideSpectralMatch bestResolvablePSM;
-                double bestTheoResolvability;
-                double bestExpResolvability;
-                double bestResolvability;
+                List<PeptideSpectralMatch> eValueSortedPSMs = null;
+                List<PeptideSpectralMatch> resolvabilitySortedPSMs = null;
+                List<PeptideSpectralMatch> bestResolvableChargePSMs = null;
+                List<PeptideSpectralMatch> eValueResolvabilitySortedPSMs = null;
                 PeptideSpectralMatch currentPSM;
                 double currentTheoResolvability;
                 double currentExpResolvability;
                 double currentResolvability;
 
-                if (psms.Count > 1 && numIsotopologueLabels > 0)
+                if (psms.Count == 1)
                 {
-                    double coefficient = (Math.Sqrt(2 * Math.Log(100.0 / QUANTSEPARATION))) / (Math.Sqrt(2 * Math.Log(2)));
-                    double spacing = spacingMassRange[1,0].Mean;
-                    bestResolvablePSM = psms[0];
-                    bestTheoResolvability = coefficient * ((Mass.MzFromMass(theoMasses[0, 0], bestResolvablePSM.Charge) / (QUANTRESOLUTION * Math.Sqrt(400 / Mass.MzFromMass(theoMasses[0, 0], bestResolvablePSM.Charge)))));
-                    bestExpResolvability = spacing / (double)bestResolvablePSM.Charge;
-                    bestResolvability = bestExpResolvability / bestTheoResolvability;
+                    bestPSMs[psmSet.Key] = psms[0];
+                    if (best == null || bestPSMs[psmSet.Key].Resolvability > best.Resolvability || bestPSMs[psmSet.Key].EValue < best.EValue) best = bestPSMs[psmSet.Key];
+                }
+                else if ((psms.Count > 1 && numIsotopologues < 2) || (psms.Count > 1 && numIsotopologues > 1 && !isotopologueLabel))
+                {
+                    eValueSortedPSMs = psms.OrderBy(psm => psm.EValue).ToList();
+                    bestPSMs[psmSet.Key] = eValueSortedPSMs[0];
+                    if (best == null || bestPSMs[psmSet.Key].EValue < best.EValue) best = bestPSMs[psmSet.Key];
+                }
+                else if (psms.Count > 1 && isotopologueLabel)
+                {
+                    double coefficient = (Math.Sqrt(2 * Math.Log(100.0 / quantSeparation))) / (Math.Sqrt(2 * Math.Log(2)));
+                    double spacing = spacingMassRange[1, 0].Mean;
 
-                    for (int i = 1; i < psms.Count; i++)
+                    for (int i = 0; i < psms.Count; i++)
                     {
                         currentPSM = psms[i];
-                        currentTheoResolvability = coefficient * ((Mass.MzFromMass(theoMasses[0, 0], currentPSM.Charge) / (QUANTRESOLUTION * Math.Sqrt(400 / Mass.MzFromMass(theoMasses[0, 0], currentPSM.Charge)))));
+                        currentTheoResolvability = coefficient * ((Mass.MzFromMass(theoMasses[0, 0], currentPSM.Charge) / (quantResolution * Math.Sqrt(400 / Mass.MzFromMass(theoMasses[0, 0], currentPSM.Charge)))));
                         currentExpResolvability = spacing / (double)currentPSM.Charge;
                         currentResolvability = currentExpResolvability / currentTheoResolvability;
-                        if (currentResolvability > bestResolvability)
-                        {
-                            bestResolvablePSM = currentPSM;
-                            bestResolvability = currentResolvability;
-                        }
+                        currentPSM.Resolvability = currentResolvability;
+                    }   
+                 
+                    resolvabilitySortedPSMs = psms.OrderByDescending(psm => psm.Resolvability).ToList();
+                    int resolvableCharge = resolvabilitySortedPSMs[0].Charge;
+                    bestResolvableChargePSMs = new List<PeptideSpectralMatch>();
+
+                    for (int i = 0; i < resolvabilitySortedPSMs.Count; i++)
+                    {
+                        if (resolvabilitySortedPSMs[0].Charge == resolvableCharge) bestResolvableChargePSMs.Add(resolvabilitySortedPSMs[i]);
                     }
 
-                    bestPSMs[psmSet.Key] = bestResolvablePSM;
+                    if (bestResolvableChargePSMs.Count > 1)
+                    {
+                        eValueResolvabilitySortedPSMs = bestResolvableChargePSMs.OrderBy(psm => psm.EValue).ToList();
+                        bestPSMs[psmSet.Key] = eValueResolvabilitySortedPSMs[0];
+                    }
+                    else
+                    {
+                        bestPSMs[psmSet.Key] = bestResolvableChargePSMs[0];
+                    }
+
+                    if (best == null || bestPSMs[psmSet.Key].Resolvability > best.Resolvability || bestPSMs[psmSet.Key].EValue < best.EValue) best = bestPSMs[psmSet.Key];
                 }
             }
+            bestPSM = best;
         }
         
         /* Calculates the MS1 scan range to use for quantification
          * Includes all PSMs, extending above and below according to the entered retention time window
          */
-        public void calculateScanRange(MSDataFile rawFile, double rTWindow)
+        public void calculateScanRange(MSDataFile rawFile, double rTWindowMin, double rTWindowMax)
         {
             int best = bestPSMs[rawFile].ScanNumber;
             List<PeptideSpectralMatch> sortedPSMs = PSMs[rawFile].OrderBy(PSM => PSM.ScanNumber).ToList();
@@ -2214,11 +2792,11 @@ namespace Coon.NeuQuant
             // For peptides eluting across more than 1000 scans, create retention time window around best PSM
             if (last - first < 1000)
             {
-                rTRange = new Range<double>(firstScanTime - rTWindow, lastScanTime + (2 * rTWindow));
+                rTRange = new Range<double>(firstScanTime - rTWindowMin, lastScanTime + rTWindowMax);
             }
             else
             {
-                rTRange = new Range<double>(bestScanTime - (2 * rTWindow), bestScanTime + (2 * rTWindow));
+                rTRange = new Range<double>(bestScanTime - rTWindowMin, bestScanTime + rTWindowMax);
             }
 
             // Check to see if retention time window extends past the length of the run
@@ -2292,7 +2870,7 @@ namespace Coon.NeuQuant
                 foreach (IPeak peakToConvert in patternPeaksFound)
                 {
                     ILabeledPeak newPeak = (ILabeledPeak)peakToConvert;
-                    if (newPeak.GetSignalToNoise() < SIGNALTONOISE)
+                    if (newPeak.GetSignalToNoise() < minSignalToNoise || newPeak.Y > maxRawIntensity)
                     {
                         newPeak = null;
                     }
@@ -2311,32 +2889,32 @@ namespace Coon.NeuQuant
                     List<ILabeledPeak> intensitySortedPeaks = convertedPeaks.OrderByDescending(peak => peak.GetSignalToNoise()).Take(2).ToList();
                     List<ILabeledPeak> mZSortedPeaks = intensitySortedPeaks.OrderBy(peak => peak.X).ToList();
 
-                    if (mZSortedPeaks.Count == 1)
+                    if (mZSortedPeaks.Count == 2)
                     {
-                        Spacings.Add(new Spacing(sequence, CurrentScan.RetentionTime, Charge, numIsotopologueLabels, Isotope, this, mZSortedPeaks[0]));
-                    }
-                    else if (mZSortedPeaks.Count == 2)
-                    {
-                        Spacings.Add(new Spacing(sequence, CurrentScan.RetentionTime, Charge, numIsotopologueLabels, Isotope, this, mZSortedPeaks[0], mZSortedPeaks[1]));
+                        Spacings.Add(new Spacing(sequence, CurrentScan.RetentionTime, CurrentScan.SpectrumNumber, Charge, countResidues('K', sequence), Isotope, this, mZSortedPeaks[0], mZSortedPeaks[1]));
                     }                    
                 }
-
                 convertedPeaks = cleanPeaks(convertedPeaks, Charge);
             }
             return convertedPeaks;
         }
 
-        public MassRange checkMappedPeaks(ILabeledPeak[] MappedPeaks, double ToleranceWidth, MassTolerance Tolerance)
+        /* Checks to see if search window should be shifted based on the detected peaks and the errors
+         * 
+         */
+        public MassRange checkMappedPeaks(ILabeledPeak[] MappedPeaks, double ToleranceWidth, MassTolerance Tolerance, int Cluster, int Isotope, int Charge)
         {
             MassRange newSearchWindow = null;
-            double halfWidth = ToleranceWidth / 2.0;
             List<int> peakPositions = new List<int>();
+            List<double> peakPpmErrors = new List<double>();
 
             for (int i = 0; i < MappedPeaks.Length; i++)
             {
+                int channelIndex = (Cluster * numIsotopologues) + i;
                 if (MappedPeaks[i] != null && MappedPeaks[i].GetSignalToNoise() >= Form1.MINIMUMSN)
                 {
                     peakPositions.Add(i);
+                    peakPpmErrors.Add(Math.Abs(MassTolerance.GetTolerance(Mass.MassFromMz(MappedPeaks[i].X, Charge), adjustedTheoMasses[channelIndex, Isotope], MassToleranceType.PPM)));
                 }
             }
 
@@ -2346,73 +2924,198 @@ namespace Coon.NeuQuant
             {
                 double newMinMZ = 0;
                 double newMaxMZ = 0;
-                if (numIsotopologues == 3)
+                if (numIsotopologues == 2)
                 {
-                    if (peakCount == 1)
+                    // Lightest peak detected
+                    if (peakPositions[0] == 0)
                     {
-                        if (peakPositions[0] == 0)
+                        // Ppm error is outside range
+                        if (peakPpmErrors[0] >= ppmTolerance.Value)
+                        {
+                            newMinMZ = new MassRange(MappedPeaks[0].X, Tolerance).Minimum;
+                            newMaxMZ = newMinMZ + ToleranceWidth;
+                        }
+                        // Shift search window to lower m/z
+                        else
                         {
                             newMaxMZ = new MassRange(MappedPeaks[0].X, Tolerance).Maximum;
                             newMinMZ = newMaxMZ - ToleranceWidth;
                         }
-                        else if (peakPositions[0] == 2)
-                        {
-                            newMinMZ = new MassRange(MappedPeaks[2].X, Tolerance).Minimum;
-                            newMaxMZ = newMinMZ + ToleranceWidth;
-                        }
                     }
-                    else if (peakCount == 2)
+                    // Heaviest peak detected
+                    else if (peakPositions[0] == 1)
                     {
-                        if (peakPositions[0] == 0 && peakPositions[1] == 1)
+                        // Ppm error is outside range
+                        if (peakPpmErrors[0] >= ppmTolerance.Value)
                         {
                             newMaxMZ = new MassRange(MappedPeaks[1].X, Tolerance).Maximum;
                             newMinMZ = newMaxMZ - ToleranceWidth;
                         }
-                        else if (peakPositions[0] == 1 && peakPositions[1] == 2)
+                        // Shift search window to higher m/z
+                        else
                         {
                             newMinMZ = new MassRange(MappedPeaks[1].X, Tolerance).Minimum;
                             newMaxMZ = newMinMZ + ToleranceWidth;
                         }
                     }
                 }
-                if (numIsotopologues == 4)
+                else if (numIsotopologues == 3)
+                {
+                    if (peakCount == 1)
+                    {
+                        // Lightest peak detected
+                        if (peakPositions[0] == 0)
+                        {
+                            if (peakPpmErrors[0] >= ppmTolerance.Value)
+                            {
+                                newMinMZ = new MassRange(MappedPeaks[0].X, Tolerance).Minimum;
+                                newMaxMZ = newMinMZ + ToleranceWidth;
+                            }
+                            else
+                            {
+                                newMaxMZ = new MassRange(MappedPeaks[0].X, Tolerance).Maximum;
+                                newMinMZ = newMaxMZ - ToleranceWidth;
+                            }
+                        }
+                        // Heaviest peak detected
+                        else if (peakPositions[0] == 2)
+                        {
+                            if (peakPpmErrors[0] >= ppmTolerance.Value)
+                            {
+                                newMaxMZ = new MassRange(MappedPeaks[2].X, Tolerance).Maximum;
+                                newMinMZ = newMaxMZ - ToleranceWidth;
+                            }
+                            else
+                            {
+                                newMinMZ = new MassRange(MappedPeaks[2].X, Tolerance).Minimum;
+                                newMaxMZ = newMinMZ + ToleranceWidth;
+                            }
+                        }
+                    }
+                    else if (peakCount == 2)
+                    {
+                        // Lightest two peaks detected
+                        if (peakPositions[0] == 0 && peakPositions[1] == 1)
+                        {
+                            if (peakPpmErrors[0] >= ppmTolerance.Value || peakPpmErrors[1] >= ppmTolerance.Value)
+                            {
+                                newMinMZ = new MassRange(MappedPeaks[0].X, Tolerance).Minimum;
+                                newMaxMZ = newMinMZ + ToleranceWidth;
+                            }
+                            else
+                            {
+                                newMaxMZ = new MassRange(MappedPeaks[1].X, Tolerance).Maximum;
+                                newMinMZ = newMaxMZ - ToleranceWidth;
+                            }
+                        }
+                        // Heaviest two peaks detected
+                        else if (peakPositions[0] == 1 && peakPositions[1] == 2)
+                        {
+                            if (peakPpmErrors[0] >= ppmTolerance.Value || peakPpmErrors[1] >= ppmTolerance.Value)
+                            {
+                                newMaxMZ = new MassRange(MappedPeaks[2].X, Tolerance).Maximum;
+                                newMinMZ = newMaxMZ - ToleranceWidth;
+                            }
+                            else
+                            {
+                                newMinMZ = new MassRange(MappedPeaks[1].X, Tolerance).Minimum;
+                                newMaxMZ = newMinMZ + ToleranceWidth;
+                            }
+                        }
+                    }
+                }
+                else if (numIsotopologues == 4)
                 {
                     if (peakCount == 2)
                     {
+                        // Lightest peaks detected
                         if (peakPositions[0] == 0 && peakPositions[1] == 1)
                         {
-                            newMaxMZ = new MassRange(MappedPeaks[1].X, Tolerance).Maximum;
-                            newMinMZ = newMaxMZ - ToleranceWidth;
+                            if (peakPpmErrors[0] >= ppmTolerance.Value || peakPpmErrors[1] >= ppmTolerance.Value)
+                            {
+                                newMinMZ = new MassRange(MappedPeaks[0].X, Tolerance).Minimum;
+                                newMaxMZ = newMinMZ + ToleranceWidth;
+                            }
+                            else
+                            {
+                                newMaxMZ = new MassRange(MappedPeaks[1].X, Tolerance).Maximum;
+                                newMinMZ = newMaxMZ - ToleranceWidth;
+                            }
                         }
                         else if(peakPositions[0] == 0 && peakPositions[1] == 2)
                         {
-                            newMaxMZ = new MassRange(MappedPeaks[2].X, Tolerance).Maximum;
-                            newMinMZ = newMaxMZ - ToleranceWidth;
+                            if (peakPpmErrors[0] >= ppmTolerance.Value || peakPpmErrors[1] >= ppmTolerance.Value)
+                            {
+                                newMinMZ = new MassRange(MappedPeaks[0].X, Tolerance).Minimum;
+                                newMaxMZ = newMinMZ + ToleranceWidth;
+                            }
+                            else
+                            {
+                                newMaxMZ = new MassRange(MappedPeaks[2].X, Tolerance).Maximum;
+                                newMinMZ = newMaxMZ - ToleranceWidth;
+                            }
                         }
+                        // Heaviest peaks detected
                         else if (peakPositions[0] == 2 && peakPositions[1] == 3)
                         {
-                            newMinMZ = new MassRange(MappedPeaks[2].X, Tolerance).Minimum;
-                            newMaxMZ = newMinMZ + ToleranceWidth;
+                            if (peakPpmErrors[0] >= ppmTolerance.Value || peakPpmErrors[1] >= ppmTolerance.Value)
+                            {
+                                newMaxMZ = new MassRange(MappedPeaks[3].X, Tolerance).Maximum;
+                                newMinMZ = newMaxMZ - ToleranceWidth;
+                            }
+                            else
+                            {
+                                newMinMZ = new MassRange(MappedPeaks[2].X, Tolerance).Minimum;
+                                newMaxMZ = newMinMZ + ToleranceWidth;
+                            }
                         }
                         else if (peakPositions[0] == 1 && peakPositions[1] == 3)
                         {
-                            newMinMZ = new MassRange(MappedPeaks[1].X, Tolerance).Minimum;
-                            newMaxMZ = newMinMZ + ToleranceWidth;
+                            if (peakPpmErrors[0] >= ppmTolerance.Value || peakPpmErrors[1] >= ppmTolerance.Value)
+                            {
+                                newMaxMZ = new MassRange(MappedPeaks[3].X, Tolerance).Maximum;
+                                newMinMZ = newMaxMZ - ToleranceWidth;
+                            }
+                            else
+                            {
+                                newMinMZ = new MassRange(MappedPeaks[1].X, Tolerance).Minimum;
+                                newMaxMZ = newMinMZ + ToleranceWidth;
+                            }
                         }
                     }
                     else if (peakCount == 3)
                     {
                         if (peakPositions[0] == 0 && peakPositions[1] == 1 && peakPositions[2] == 2)
                         {
-                            newMaxMZ = new MassRange(MappedPeaks[2].X, Tolerance).Maximum;
-                            newMinMZ = newMaxMZ - ToleranceWidth;
+                            if (peakPpmErrors[0] >= ppmTolerance.Value || peakPpmErrors[1] >= ppmTolerance.Value || peakPpmErrors[2] >= ppmTolerance.Value)
+                            {
+                                newMinMZ = new MassRange(MappedPeaks[0].X, Tolerance).Minimum;
+                                newMaxMZ = newMinMZ + ToleranceWidth;
+                            }
+                            else
+                            {
+                                newMaxMZ = new MassRange(MappedPeaks[2].X, Tolerance).Maximum;
+                                newMinMZ = newMaxMZ - ToleranceWidth;
+                            }
                         }
                         else if (peakPositions[0] == 1 && peakPositions[1] == 2 && peakPositions[2] == 3)
                         {
-                            newMinMZ = new MassRange(MappedPeaks[1].X, Tolerance).Minimum;
-                            newMaxMZ = newMinMZ + ToleranceWidth;
+                            if (peakPpmErrors[0] >= ppmTolerance.Value || peakPpmErrors[1] >= ppmTolerance.Value || peakPpmErrors[2] >= ppmTolerance.Value)
+                            {
+                                newMaxMZ = new MassRange(MappedPeaks[2].X, Tolerance).Maximum;
+                                newMinMZ = newMaxMZ - ToleranceWidth;
+                            }
+                            else
+                            {
+                                newMinMZ = new MassRange(MappedPeaks[1].X, Tolerance).Minimum;
+                                newMaxMZ = newMinMZ + ToleranceWidth;
+                            }
                         }
                     }
+                }
+                else if (numIsotopologues == 6)
+                {
+
                 }
                 newSearchWindow = new MassRange(newMinMZ, newMaxMZ);                
             }
@@ -2426,31 +3129,25 @@ namespace Coon.NeuQuant
         public void findPeaks(MSDataScan current, MSDataFile rawFile, List<Spacing> spacings = null)
         {
             int charge = bestPSMs[rawFile].Charge;
-            ILabeledPeak[,] peaksFound = new ILabeledPeak[numChannels, numIsotopes];
-            Pair pair;
+            ILabeledPeak[] peaksFound = new ILabeledPeak[numChannels];
             double injectionTime = rawFile.GetInjectionTime(current.SpectrumNumber);
+            Pair pair = new Pair(this, rawFile, current.SpectrumNumber, charge, injectionTime, current.RetentionTime);
             int peaksCount = 0;
-            int isotopeCount = 0;
-            int clusterCount = 0;
-            bool stop = false;
 
-            if (numIsotopologues > 1)
+            if (numIsotopologues > 1 && !Form1.CROSSCLUSTERQUANT)
             {
-                int channelIndex;
-
-                clusterCount = 0;
                 for (int c = 0; c < numClusters; c++) // Start cluster loop
                 {
                     if (GetTheoreticalResolvability(c))
                     {
-                        isotopeCount = 0;
                         for (int j = 0; j < numIsotopes; j++) // Start isotope loop
                         {
+                            peaksFound = new ILabeledPeak[numChannels];
                             peaksCount = 0;
-                            channelIndex = c * numIsotopologues;
+                            int channelIndex = c * numIsotopologues;
 
                             // Start pattern search
-                            MassTolerance tolerance = new MassTolerance(MassToleranceType.PPM, TOLERANCE.Value);
+                            MassTolerance tolerance = new MassTolerance(MassToleranceType.PPM, ppmTolerance.Value);
 
                             MassRange minRange = new MassRange(adjustedTheoMasses[channelIndex,j], tolerance);
                             MassRange maxRange = new MassRange(adjustedTheoMasses[channelIndex + (numIsotopologues - 1), j], tolerance);
@@ -2464,7 +3161,7 @@ namespace Coon.NeuQuant
                             List<ILabeledPeak> topSignalToNoisePeaks = null;
                             List<ILabeledPeak> orderedByMzPeaks = null;
                             if (cleanedPeaks != null && cleanedPeaks.Count > 0)
-                            {
+                            {                                
                                 topSignalToNoisePeaks = cleanedPeaks.OrderByDescending(peakSort => peakSort.GetSignalToNoise()).Take(numIsotopologues).ToList();
                                 // Peaks found for a complete set of isotopologues                             
                                 if (topSignalToNoisePeaks.Count == numIsotopologues)
@@ -2472,105 +3169,109 @@ namespace Coon.NeuQuant
                                     orderedByMzPeaks = topSignalToNoisePeaks.OrderBy(peakSort => peakSort.X).ToList();
                                     for (int i = 0; i < numIsotopologues; i++)
                                     {
-                                        peaksFound[channelIndex + i, j] = orderedByMzPeaks[i];
+                                        peaksFound[channelIndex + i] = orderedByMzPeaks[i];
                                     }
                                 }
                                 else
                                 {
-                                    if (!Form1.NOISEBANDCAP)
-                                    {
-                                        if (topSignalToNoisePeaks.Count >= numIsotopologues / 2)
-                                        {
-                                            ILabeledPeak[] mappedPeaks = mapPeaks(topSignalToNoisePeaks, channelIndex, channelIndex + (numIsotopologues - 1), j, charge);
-                                            MassRange newSearchWindow = checkMappedPeaks(mappedPeaks, totalRange.Width, tolerance);
+                                    //if (!Form1.NOISEBANDCAP)
+                                    //{
+                                    //    if (topSignalToNoisePeaks.Count >= numIsotopologues / 2)
+                                    //    {
+                                    //        ILabeledPeak[] mappedPeaks = mapPeaks(topSignalToNoisePeaks, channelIndex, channelIndex + (numIsotopologues - 1), j, charge);
+                                    //        MassRange newSearchWindow = checkMappedPeaks(mappedPeaks, totalRange.Width, tolerance, c, j, charge);
 
-                                            if (newSearchWindow != null)
-                                            {
-                                                List<ILabeledPeak> secondTryPeaks = findPeakPatterns(newSearchWindow, charge, current);
-                                                List<ILabeledPeak> secondTryTopSignalToNoisePeaks = null;
-                                                List<ILabeledPeak> secondTryOrderedByMzPeaks = null;
-                                                if (secondTryPeaks != null && secondTryPeaks.Count == numIsotopologues)
-                                                {
-                                                    secondTryTopSignalToNoisePeaks = secondTryPeaks.OrderByDescending(peakSort => peakSort.GetSignalToNoise()).Take(numIsotopologues).ToList();
-                                                    secondTryOrderedByMzPeaks = secondTryTopSignalToNoisePeaks.OrderBy(peakSort => peakSort.X).ToList();
-                                                    for (int i = 0; i < numIsotopologues; i++)
-                                                    {
-                                                        peaksFound[channelIndex + i, j] = secondTryOrderedByMzPeaks[i];
-                                                    }
-                                                }
-                                                else
-                                                {
-                                                    for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
-                                                    {
-                                                        peaksFound[m, j] = mappedPeaks[m - channelIndex];
-                                                    }
-                                                }
-                                            }
-                                            else
-                                            {
-                                                for (int i = 0; i < numIsotopologues; i++)
-                                                {
-                                                    peaksFound[channelIndex + i, j] = null;
-                                                }
-                                            }
-                                        }
-                                        else
-                                        {
-                                            for (int i = 0; i < numIsotopologues; i++)
-                                            {
-                                                peaksFound[channelIndex + i, j] = null;
-                                            }
-                                        }
-                                    }
-                                    else
+                                    //        if (newSearchWindow != null)
+                                    //        {
+                                    //            List<ILabeledPeak> secondTryPeaks = findPeakPatterns(newSearchWindow, charge, current);
+                                    //            List<ILabeledPeak> secondTryTopSignalToNoisePeaks = null;
+                                    //            List<ILabeledPeak> secondTryOrderedByMzPeaks = null;
+                                    //            if (secondTryPeaks != null && secondTryPeaks.Count == numIsotopologues)
+                                    //            {
+                                    //                secondTryTopSignalToNoisePeaks = secondTryPeaks.OrderByDescending(peakSort => peakSort.GetSignalToNoise()).Take(numIsotopologues).ToList();
+                                    //                secondTryOrderedByMzPeaks = secondTryTopSignalToNoisePeaks.OrderBy(peakSort => peakSort.X).ToList();
+                                    //                for (int i = 0; i < numIsotopologues; i++)
+                                    //                {
+                                    //                    peaksFound[channelIndex + i, j] = secondTryOrderedByMzPeaks[i];
+                                    //                }
+                                    //            }
+                                    //            else
+                                    //            {
+                                    //                for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
+                                    //                {
+                                    //                    peaksFound[m, j] = mappedPeaks[m - channelIndex];
+                                    //                }
+                                    //            }
+                                    //        }
+                                    //        else
+                                    //        {
+                                    //            for (int i = 0; i < numIsotopologues; i++)
+                                    //            {
+                                    //                peaksFound[channelIndex + i, j] = null;
+                                    //            }
+                                    //        }
+                                    //    }
+                                    //    else
+                                    //    {
+                                    //        for (int i = 0; i < numIsotopologues; i++)
+                                    //        {
+                                    //            peaksFound[channelIndex + i, j] = null;
+                                    //        }
+                                    //    }
+                                    //}
+                                    if (Form1.NOISEBANDCAP)
                                     {
                                         // Peaks found for an incomplete set of isotopologues by pattern detection
                                         if (topSignalToNoisePeaks.Count >= peaksNeeded)
                                         {
                                             ILabeledPeak[] mappedPeaks = mapPeaks(topSignalToNoisePeaks, channelIndex, channelIndex + (numIsotopologues - 1), j, charge);
-                                            MassRange newSearchWindow = checkMappedPeaks(mappedPeaks, totalRange.Width, tolerance);
+                                            for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
+                                            {
+                                                peaksFound[m] = mappedPeaks[m - channelIndex];
+                                            }
+                                            //MassRange newSearchWindow = checkMappedPeaks(mappedPeaks, totalRange.Width, tolerance, c, j, charge);
 
-                                            if (newSearchWindow == null)
-                                            {
-                                                for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
-                                                {
-                                                    peaksFound[m, j] = mappedPeaks[m - channelIndex];
-                                                }
-                                            }
-                                            else
-                                            {
-                                                List<ILabeledPeak> secondTryPeaks = findPeakPatterns(newSearchWindow, charge, current);
-                                                List<ILabeledPeak> secondTryTopSignalToNoisePeaks = null;
-                                                List<ILabeledPeak> secondTryOrderedByMzPeaks = null;
-                                                if (secondTryPeaks != null && secondTryPeaks.Count > topSignalToNoisePeaks.Count)
-                                                {
-                                                    secondTryTopSignalToNoisePeaks = secondTryPeaks.OrderByDescending(peakSort => peakSort.GetSignalToNoise()).Take(numIsotopologues).ToList();
-                                                    if (secondTryTopSignalToNoisePeaks.Count == numIsotopologues)
-                                                    {
-                                                        secondTryOrderedByMzPeaks = secondTryTopSignalToNoisePeaks.OrderBy(peakSort => peakSort.X).ToList();
-                                                        for (int i = 0; i < numIsotopologues; i++)
-                                                        {
-                                                            peaksFound[channelIndex + i, j] = secondTryOrderedByMzPeaks[i];
-                                                        }
-                                                    }
-                                                    else if (secondTryTopSignalToNoisePeaks.Count >= peaksNeeded)
-                                                    {
-                                                        double additionalPPMError = MassTolerance.GetTolerance(newSearchWindow.Minimum, totalRange.Minimum, MassToleranceType.PPM);
-                                                        ILabeledPeak[] secondTryMappedPeaks = mapPeaks(secondTryTopSignalToNoisePeaks, channelIndex, channelIndex + (numIsotopologues - 1), j, charge, additionalPPMError);
-                                                        for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
-                                                        {
-                                                            peaksFound[m, j] = secondTryMappedPeaks[m - channelIndex];
-                                                        }
-                                                    }
-                                                }
-                                                else
-                                                {
-                                                    for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
-                                                    {
-                                                        peaksFound[m, j] = mappedPeaks[m - channelIndex];
-                                                    }
-                                                }
-                                            }
+                                            //if (newSearchWindow == null)
+                                            //{
+                                            //    for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
+                                            //    {
+                                            //        peaksFound[m, j] = mappedPeaks[m - channelIndex];
+                                            //    }
+                                            //}
+                                            //else
+                                            //{
+                                            //    List<ILabeledPeak> secondTryPeaks = findPeakPatterns(newSearchWindow, charge, current);
+                                            //    List<ILabeledPeak> secondTryTopSignalToNoisePeaks = null;
+                                            //    List<ILabeledPeak> secondTryOrderedByMzPeaks = null;
+                                            //    if (secondTryPeaks != null && secondTryPeaks.Count > topSignalToNoisePeaks.Count)
+                                            //    {
+                                            //        secondTryTopSignalToNoisePeaks = secondTryPeaks.OrderByDescending(peakSort => peakSort.GetSignalToNoise()).Take(numIsotopologues).ToList();
+                                            //        if (secondTryTopSignalToNoisePeaks.Count == numIsotopologues)
+                                            //        {
+                                            //            secondTryOrderedByMzPeaks = secondTryTopSignalToNoisePeaks.OrderBy(peakSort => peakSort.X).ToList();
+                                            //            for (int i = 0; i < numIsotopologues; i++)
+                                            //            {
+                                            //                peaksFound[channelIndex + i, j] = secondTryOrderedByMzPeaks[i];
+                                            //            }
+                                            //        }
+                                            //        else if (secondTryTopSignalToNoisePeaks.Count >= peaksNeeded)
+                                            //        {
+                                            //            double additionalPPMError = MassTolerance.GetTolerance(newSearchWindow.Minimum, totalRange.Minimum, MassToleranceType.PPM);
+                                            //            ILabeledPeak[] secondTryMappedPeaks = mapPeaks(secondTryTopSignalToNoisePeaks, channelIndex, channelIndex + (numIsotopologues - 1), j, charge, additionalPPMError);
+                                            //            for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
+                                            //            {
+                                            //                peaksFound[m, j] = secondTryMappedPeaks[m - channelIndex];
+                                            //            }
+                                            //        }
+                                            //    }
+                                            //    else
+                                            //    {
+                                            //        for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
+                                            //        {
+                                            //            peaksFound[m, j] = mappedPeaks[m - channelIndex];
+                                            //        }
+                                            //    }
+                                            //}
                                         }
                                     }
                                 }
@@ -2579,7 +3280,7 @@ namespace Coon.NeuQuant
                             // Count detected peaks
                             for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
                             {
-                                if (peaksFound[i, j] != null)
+                                if (peaksFound[i] != null)
                                 {
                                     peaksCount++;
                                 }
@@ -2588,108 +3289,273 @@ namespace Coon.NeuQuant
                             // If enough peaks are detected, increase the cluster count
                             if (peaksCount >= peaksNeeded)
                             {
-                                isotopeCount++;
+                                IsotopePair isotopePair = new IsotopePair(pair, j);    
+                                for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+                                {
+                                    isotopePair.ChannelPeaks[i] = peaksFound[i];
+                                }
+                                pair.IsotopePairs.Add(isotopePair);
                             }
                             // If not, set all peaks to null
                             else
                             {
                                 for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
                                 {
-                                    peaksFound[i, j] = null;
+                                    peaksFound[i] = null;
                                 }
                             }
                         } // End isotope loop
-                        if (isotopeCount > 0)
-                        {
-                            clusterCount++;
-                        }
                     }
                 } // End cluster loop
 
-                if (clusterCount > 0)
-                {
-                    if (Form1.SEGMENTEDINJECTIONTIMES)
-                    {
-                        bool peakFound = false;
-                        int channelCount = 0;
-                        double mZ = 0;
-                        double timeSum = 0;
+                //if (Form1.SEGMENTEDINJECTIONTIMES)
+                //{
+                //    bool peakFound = false;
+                //    int channelCount = 0;
+                //    double mZ = 0;
+                //    double timeSum = 0;
 
-                        while (channelCount < numChannels && !peakFound)
-                        {
-                            for (int j = 0; j < numIsotopes; j++)
-                            {
-                                if (peaksFound[channelCount, j] != null)
-                                {
-                                    mZ = peaksFound[channelCount, j].X;
-                                    peakFound = true;
-                                }
-                            }                    
-                            channelCount++;
-                        }
+                //    while (channelCount < numChannels && !peakFound)
+                //    {
+                //        for (int j = 0; j < numIsotopes; j++)
+                //        {
+                //            if (peaksFound[channelCount, j] != null)
+                //            {
+                //                mZ = peaksFound[channelCount, j].X;
+                //                peakFound = true;
+                //            }
+                //        }                    
+                //        channelCount++;
+                //    }
                         
-                        Dictionary<int, Dictionary<Range<double>, double>> scanNumbers = null;
-                        if (Form1.INJECTIONTIMES.TryGetValue(rawFile.Name, out scanNumbers))
-                        {
-                            Dictionary<Range<double>, double> injectionTimes = null;
+                //    Dictionary<int, Dictionary<Range<double>, double>> scanNumbers = null;
+                //    if (Form1.INJECTIONTIMES.TryGetValue(rawFile.Name, out scanNumbers))
+                //    {
+                //        Dictionary<Range<double>, double> injectionTimes = null;
 
-                            if (scanNumbers.TryGetValue(current.SpectrumNumber, out injectionTimes))
-                            {
-                                List<double> times = new List<double>();
-                                foreach (KeyValuePair<Range<double>, double> segment in injectionTimes)
-                                {
-                                    if (segment.Key.Contains(mZ))
-                                    {
-                                        times.Add(segment.Value);
-                                        timeSum += segment.Value;
-                                    }
-                                }
+                //        if (scanNumbers.TryGetValue(current.SpectrumNumber, out injectionTimes))
+                //        {
+                //            List<double> times = new List<double>();
+                //            foreach (KeyValuePair<Range<double>, double> segment in injectionTimes)
+                //            {
+                //                if (segment.Key.Contains(mZ))
+                //                {
+                //                    times.Add(segment.Value);
+                //                    timeSum += segment.Value;
+                //                }
+                //            }
 
-                                injectionTime = (timeSum / ((double)times.Count)) / 1000.0;
-                            }
-                        }
-                    }
-                    
-                    pair = new Pair(this, rawFile, current.SpectrumNumber, injectionTime, current.RetentionTime);
-                    pair.peaks = peaksFound;
-                    if (pair.totalPeakCount > 0)
-                    {
-                        allPairs[rawFile].Add(pair);
-                    }  
+                //            pair.InjectionTime = (timeSum / ((double)times.Count)) / 1000.0;
+                //        }
+                //    }
+                //}
+                if (pair.IsotopePairs.Count > 0)
+                {
+                    allPairs[rawFile].Add(pair);
                 }   
             }
+            //else if (numIsotopologues > 1 && Form1.CROSSCLUSTERQUANT)
+            //{
+            //    if (allClustersResolvable)
+            //    {
+            //        int channelIndex;
+            //        isotopeCount = 0;
+            //        for (int j = 0; j < numIsotopes; j++) // Start cluster loop
+            //        {
+            //            peaksCount = 0;
+            //            for (int c = 0; c < numClusters; c++) // Start isotope loop
+            //            {
+            //                channelIndex = c * numIsotopologues;
+
+            //                // Start pattern search
+            //                MassTolerance tolerance = new MassTolerance(MassToleranceType.PPM, ppmTolerance.Value);
+
+            //                MassRange minRange = new MassRange(adjustedTheoMasses[channelIndex, j], tolerance);
+            //                MassRange maxRange = new MassRange(adjustedTheoMasses[channelIndex + (numIsotopologues - 1), j], tolerance);
+
+            //                double minMZ = Mass.MzFromMass(minRange.Minimum, charge);
+            //                double maxMZ = Mass.MzFromMass(maxRange.Maximum, charge);
+
+            //                MassRange totalRange = new MassRange(minMZ, maxMZ);
+
+            //                List<ILabeledPeak> cleanedPeaks = findPeakPatterns(totalRange, charge, current, spacings, j);
+            //                List<ILabeledPeak> topSignalToNoisePeaks = null;
+            //                List<ILabeledPeak> orderedByMzPeaks = null;
+            //                if (cleanedPeaks != null && cleanedPeaks.Count > 0)
+            //                {
+            //                    topSignalToNoisePeaks = cleanedPeaks.OrderByDescending(peakSort => peakSort.GetSignalToNoise()).Take(numIsotopologues).ToList();
+            //                    // Peaks found for a complete set of isotopologues                             
+            //                    if (topSignalToNoisePeaks.Count == numIsotopologues)
+            //                    {
+            //                        orderedByMzPeaks = topSignalToNoisePeaks.OrderBy(peakSort => peakSort.X).ToList();
+            //                        for (int i = 0; i < numIsotopologues; i++)
+            //                        {
+            //                            peaksFound[channelIndex + i, j] = orderedByMzPeaks[i];
+            //                        }
+            //                    }
+            //                    else
+            //                    {
+            //                        //if (!Form1.NOISEBANDCAP)
+            //                        //{
+            //                        //    if (topSignalToNoisePeaks.Count >= numIsotopologues / 2)
+            //                        //    {
+            //                        //        ILabeledPeak[] mappedPeaks = mapPeaks(topSignalToNoisePeaks, channelIndex, channelIndex + (numIsotopologues - 1), j, charge);
+            //                        //        MassRange newSearchWindow = checkMappedPeaks(mappedPeaks, totalRange.Width, tolerance, c, j, charge);
+
+            //                        //        if (newSearchWindow != null)
+            //                        //        {
+            //                        //            List<ILabeledPeak> secondTryPeaks = findPeakPatterns(newSearchWindow, charge, current);
+            //                        //            List<ILabeledPeak> secondTryTopSignalToNoisePeaks = null;
+            //                        //            List<ILabeledPeak> secondTryOrderedByMzPeaks = null;
+            //                        //            if (secondTryPeaks != null && secondTryPeaks.Count == numIsotopologues)
+            //                        //            {
+            //                        //                secondTryTopSignalToNoisePeaks = secondTryPeaks.OrderByDescending(peakSort => peakSort.GetSignalToNoise()).Take(numIsotopologues).ToList();
+            //                        //                secondTryOrderedByMzPeaks = secondTryTopSignalToNoisePeaks.OrderBy(peakSort => peakSort.X).ToList();
+            //                        //                for (int i = 0; i < numIsotopologues; i++)
+            //                        //                {
+            //                        //                    peaksFound[channelIndex + i, j] = secondTryOrderedByMzPeaks[i];
+            //                        //                }
+            //                        //            }
+            //                        //            else
+            //                        //            {
+            //                        //                for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
+            //                        //                {
+            //                        //                    peaksFound[m, j] = mappedPeaks[m - channelIndex];
+            //                        //                }
+            //                        //            }
+            //                        //        }
+            //                        //        else
+            //                        //        {
+            //                        //            for (int i = 0; i < numIsotopologues; i++)
+            //                        //            {
+            //                        //                peaksFound[channelIndex + i, j] = null;
+            //                        //            }
+            //                        //        }
+            //                        //    }
+            //                        //    else
+            //                        //    {
+            //                        //        for (int i = 0; i < numIsotopologues; i++)
+            //                        //        {
+            //                        //            peaksFound[channelIndex + i, j] = null;
+            //                        //        }
+            //                        //    }
+            //                        //}
+            //                        if (Form1.NOISEBANDCAP)
+            //                        {
+            //                            // Peaks found for an incomplete set of isotopologues by pattern detection
+            //                            if (topSignalToNoisePeaks.Count >= 0)
+            //                            {
+            //                                ILabeledPeak[] mappedPeaks = mapPeaks(topSignalToNoisePeaks, channelIndex, channelIndex + (numIsotopologues - 1), j, charge);
+            //                                MassRange newSearchWindow = checkMappedPeaks(mappedPeaks, totalRange.Width, tolerance, c, j, charge);
+
+            //                                if (newSearchWindow == null)
+            //                                {
+            //                                    for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
+            //                                    {
+            //                                        peaksFound[m, j] = mappedPeaks[m - channelIndex];
+            //                                    }
+            //                                }
+            //                                else
+            //                                {
+            //                                    List<ILabeledPeak> secondTryPeaks = findPeakPatterns(newSearchWindow, charge, current);
+            //                                    List<ILabeledPeak> secondTryTopSignalToNoisePeaks = null;
+            //                                    List<ILabeledPeak> secondTryOrderedByMzPeaks = null;
+            //                                    if (secondTryPeaks != null && secondTryPeaks.Count > topSignalToNoisePeaks.Count)
+            //                                    {
+            //                                        secondTryTopSignalToNoisePeaks = secondTryPeaks.OrderByDescending(peakSort => peakSort.GetSignalToNoise()).Take(numIsotopologues).ToList();
+            //                                        if (secondTryTopSignalToNoisePeaks.Count == numIsotopologues)
+            //                                        {
+            //                                            secondTryOrderedByMzPeaks = secondTryTopSignalToNoisePeaks.OrderBy(peakSort => peakSort.X).ToList();
+            //                                            for (int i = 0; i < numIsotopologues; i++)
+            //                                            {
+            //                                                peaksFound[channelIndex + i, j] = secondTryOrderedByMzPeaks[i];
+            //                                            }
+            //                                        }
+            //                                        else if (secondTryTopSignalToNoisePeaks.Count >= 0)
+            //                                        {
+            //                                            double additionalPPMError = MassTolerance.GetTolerance(newSearchWindow.Minimum, totalRange.Minimum, MassToleranceType.PPM);
+            //                                            ILabeledPeak[] secondTryMappedPeaks = mapPeaks(secondTryTopSignalToNoisePeaks, channelIndex, channelIndex + (numIsotopologues - 1), j, charge, additionalPPMError);
+            //                                            for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
+            //                                            {
+            //                                                peaksFound[m, j] = secondTryMappedPeaks[m - channelIndex];
+            //                                            }
+            //                                        }
+            //                                    }
+            //                                    else
+            //                                    {
+            //                                        for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
+            //                                        {
+            //                                            peaksFound[m, j] = mappedPeaks[m - channelIndex];
+            //                                        }
+            //                                    }
+            //                                }
+            //                            }
+            //                        }
+            //                    }
+
+            //                    for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
+            //                    {
+            //                        if (peaksFound[m, j] != null) peaksCount++;
+            //                    }
+            //                }
+            //            } // End cluster loop
+            //            if (peaksCount >= peaksNeeded) isotopeCount++;
+            //            else
+            //            {
+            //                for (int i = 0; i < numChannels; i++)
+            //                {
+            //                    peaksFound[i, j] = null;
+            //                }
+            //            }
+            //        } // End isotope loop
+
+            //        if (isotopeCount > 0)
+            //        {
+            //            pair = new Pair(this, rawFile, current.SpectrumNumber, injectionTime, current.RetentionTime);
+            //            pair.peaks = peaksFound;
+            //            if (pair.totalPeakCount > 0)
+            //            {
+            //                allPairs[rawFile].Add(pair);
+            //            }
+            //        }
+            //    } 
+            //}
             // Traditional SILAC (i.e., one channel per cluster)
             else
             {
-                isotopeCount = 0;
                 for (int j = 0; j < numIsotopes; j++)
                 {
                     peaksCount = 0;
+                    peaksFound = new ILabeledPeak[numChannels];
                     for (int i = 0; i < numChannels; i++)
                     {
-                        peaksFound[i, j] = largestPeak(adjustedTheoMasses[i, j], current, TOLERANCE, rawFile);
-                        if (peaksFound[i, j] != null)
+                        peaksFound[i] = largestPeak(adjustedTheoMasses[i, j], current, ppmTolerance, rawFile);
+                        if (peaksFound[i] != null)
                         {
                             peaksCount++;
                         }
                     }
-                    if (peaksCount < peaksNeeded)
+                    if (peaksCount >= peaksNeeded)
                     {
-                        for (int k = 0; k < numChannels; k++)
+                        IsotopePair isotopePair = new IsotopePair(pair, j);
+                        for (int i = 0; i < numChannels; i++)
                         {
-                            peaksFound[k, j] = null;
+                            isotopePair.ChannelPeaks[i] = peaksFound[i];
                         }
+                        pair.IsotopePairs.Add(isotopePair);
+                        
                     }
                     else
                     {
-                        isotopeCount++;
+                        for (int k = 0; k < numChannels; k++)
+                        {
+                            peaksFound[k] = null;
+                        }
                     }
                 }
 
-                if (isotopeCount > 0)
+                if (pair.IsotopePairs.Count > 0)
                 {
-                    pair = new Pair(this, rawFile, current.SpectrumNumber, injectionTime, current.RetentionTime);
-                    pair.peaks = peaksFound;
                     allPairs[rawFile].Add(pair);
                 }
             }
@@ -2699,7 +3565,7 @@ namespace Coon.NeuQuant
         {
             if (initialList != null && initialList.Count > 1)
             {
-                double theoTh = (spacingMassRange[1, 0].Mean * 1000.0) /  (double)charge;
+                double theoTh = (spacingMassRange[1, 0].Maximum * 0.9 * 1000.0) /  (double)charge;
                 double theoThThreshold = theoTh / 1.5;
                 List<ILabeledPeak> cleanedList = new List<ILabeledPeak>();
                 List<ILabeledPeak> sortedIntensityList = initialList.OrderByDescending(dirtyPeak => dirtyPeak.GetSignalToNoise()).ToList();
@@ -2787,8 +3653,8 @@ namespace Coon.NeuQuant
                 if (numIsotopologues == 2)
                 {
                     neutralMass = Mass.MassFromMz(currentPeak.X, charge);
-                    error1 = MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart, isotope], MassToleranceType.PPM);
-                    error2 = MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelEnd, isotope], MassToleranceType.PPM);
+                    error1 = Math.Abs(MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart, isotope], MassToleranceType.PPM));
+                    error2 = Math.Abs(MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelEnd, isotope], MassToleranceType.PPM));
                     if ((error1) < (error2))
                     {
                         mappedPeaks[0] = currentPeak;
@@ -2802,9 +3668,9 @@ namespace Coon.NeuQuant
                 else if (numIsotopologues == 3)
                 {
                     neutralMass = Mass.MassFromMz(currentPeak.X, charge);
-                    error1 = MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart, isotope], MassToleranceType.PPM);
-                    error2 = MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart + 1, isotope], MassToleranceType.PPM);
-                    error3 = MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart + 2, isotope], MassToleranceType.PPM);
+                    error1 = Math.Abs(MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart, isotope], MassToleranceType.PPM));
+                    error2 = Math.Abs(MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart + 1, isotope], MassToleranceType.PPM));
+                    error3 = Math.Abs(MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart + 2, isotope], MassToleranceType.PPM));
 
                     // 3 possibilities
                     if (orderedByMzPeaks.Count == 1)
@@ -2812,6 +3678,8 @@ namespace Coon.NeuQuant
                         if (error1 < error2 && error1 < error3) mappedPeaks[0] = currentPeak;
                         else if (error2 < error1 && error2 < error3) mappedPeaks[1] = currentPeak;
                         else if (error3 < error1 && error3 < error2) mappedPeaks[2] = currentPeak;
+
+                        return mappedPeaks;
                     }
                     // 3 possibilities
                     else if (orderedByMzPeaks.Count == 2)
@@ -2833,10 +3701,10 @@ namespace Coon.NeuQuant
                 else if (numIsotopologues == 4)
                 {
                     neutralMass = Mass.MassFromMz(currentPeak.X, charge);
-                    error1 = MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart, isotope], MassToleranceType.PPM);
-                    error2 = MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart + 1, isotope], MassToleranceType.PPM);
-                    error3 = MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart + 2, isotope], MassToleranceType.PPM);
-                    error4 = MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart + 3, isotope], MassToleranceType.PPM);
+                    error1 = Math.Abs(MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart, isotope], MassToleranceType.PPM));
+                    error2 = Math.Abs(MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart + 1, isotope], MassToleranceType.PPM));
+                    error3 = Math.Abs(MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart + 2, isotope], MassToleranceType.PPM));
+                    error4 = Math.Abs(MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart + 3, isotope], MassToleranceType.PPM));
 
                     // 6 possibilities
                     if (orderedByMzPeaks.Count == 2)
@@ -2890,12 +3758,12 @@ namespace Coon.NeuQuant
                 else if (numIsotopologues == 6)
                 {
                     neutralMass = Mass.MassFromMz(currentPeak.X, charge);
-                    error1 = MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart, isotope], MassToleranceType.PPM);
-                    error2 = MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart + 1, isotope], MassToleranceType.PPM);
-                    error3 = MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart + 2, isotope], MassToleranceType.PPM);
-                    error4 = MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart + 3, isotope], MassToleranceType.PPM);
-                    error5 = MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart + 4, isotope], MassToleranceType.PPM);
-                    error6 = MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart + 5, isotope], MassToleranceType.PPM);
+                    error1 = Math.Abs(MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart, isotope], MassToleranceType.PPM));
+                    error2 = Math.Abs(MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart + 1, isotope], MassToleranceType.PPM));
+                    error3 = Math.Abs(MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart + 2, isotope], MassToleranceType.PPM));
+                    error4 = Math.Abs(MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart + 3, isotope], MassToleranceType.PPM));
+                    error5 = Math.Abs(MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart + 4, isotope], MassToleranceType.PPM));
+                    error6 = Math.Abs(MassTolerance.GetTolerance(neutralMass, additionallyAdjustedTheoMasses[channelStart + 5, isotope], MassToleranceType.PPM));
 
                     // 20 possibilities
                     if (orderedByMzPeaks.Count == 3)
@@ -3135,367 +4003,367 @@ namespace Coon.NeuQuant
 
         /* Checks a pair for coalescence by considering the missing channel frequencies of more and less intense pairs
          */
-        public void checkPairCoalescence(MSDataFile rawFile)
-        {
-            PeptideSpectralMatch best = PSMs[rawFile][0];
-            int scanNumber = best.ScanNumber;
-            double injectionTime;
-            List<Pair> pairs;
-            Pair pair;
-            ILabeledPeak peak1;
-            ILabeledPeak peak2;
-            ILabeledPeak peak3;
-            ILabeledPeak peak4;
-            IsotopePair isotopePair;
-            List<IsotopePair> lowerIntensity;
-            List<IsotopePair> higherIntensity;
-            double lowerFrequency;
-            double higherFrequency;
+        //public void checkPairCoalescence(MSDataFile rawFile)
+        //{
+        //    PeptideSpectralMatch best = PSMs[rawFile][0];
+        //    int scanNumber = best.ScanNumber;
+        //    double injectionTime;
+        //    List<Pair> pairs;
+        //    Pair pair;
+        //    ILabeledPeak peak1;
+        //    ILabeledPeak peak2;
+        //    ILabeledPeak peak3;
+        //    ILabeledPeak peak4;
+        //    IsotopePair isotopePair;
+        //    List<IsotopePair> lowerIntensity;
+        //    List<IsotopePair> higherIntensity;
+        //    double lowerFrequency;
+        //    double higherFrequency;
 
-            allPairs.TryGetValue(rawFile, out pairs);
-            for (int p = 0; p < pairs.Count(); p++)
-            {
-                pair = pairs[p];
-                injectionTime = rawFile.GetInjectionTime(pair.scanNumber);
-                for (int c = 0; c < numChannels; c += numIsotopologues)
-                {
-                    for (int j = 0; j < numIsotopes; j++)
-                    {
-                        if (numIsotopologues == 2)
-                        {
-                            peak1 = pair.peaks[c, j];
-                            peak2 = pair.peaks[c + 1, j];
+        //    allPairs.TryGetValue(rawFile, out pairs);
+        //    for (int p = 0; p < pairs.Count(); p++)
+        //    {
+        //        pair = pairs[p];
+        //        injectionTime = rawFile.GetInjectionTime(pair.ScanNumber);
+        //        for (int c = 0; c < numChannels; c += numIsotopologues)
+        //        {
+        //            for (int j = 0; j < numIsotopes; j++)
+        //            {
+        //                if (numIsotopologues == 2)
+        //                {
+        //                    peak1 = pair.peaks[c, j];
+        //                    peak2 = pair.peaks[c + 1, j];
 
-                            // Do not alter complete or null pairs or pairs with a maximum intensity below the set threshold
-                            if (peak1 != null && peak2 != null)
-                            {
+        //                    // Do not alter complete or null pairs or pairs with a maximum intensity below the set threshold
+        //                    if (peak1 != null && peak2 != null)
+        //                    {
 
-                            }
-                            else if (peak1 == null && peak2 == null)
-                            {
+        //                    }
+        //                    else if (peak1 == null && peak2 == null)
+        //                    {
                                 
-                            }
-                            //else if (log10MaxIntensity <= System.Math.Log10(Form1.MAXIMUMDNL))
-                            //{
+        //                    }
+        //                    //else if (log10MaxIntensity <= System.Math.Log10(Form1.MAXIMUMDNL))
+        //                    //{
                                 
-                            //}
-                            // Proceed with the analysis for all other pairs
-                            else
-                            {
-                                ILabeledPeak singlePeak;
-                                ILabeledPeak otherPeak1;
-                                ILabeledPeak otherPeak2;
-                                double singlePeakIntensity;
-                                Pair otherPair;
+        //                    //}
+        //                    // Proceed with the analysis for all other pairs
+        //                    else
+        //                    {
+        //                        ILabeledPeak singlePeak;
+        //                        ILabeledPeak otherPeak1;
+        //                        ILabeledPeak otherPeak2;
+        //                        double singlePeakIntensity;
+        //                        Pair otherPair;
 
-                                // Find the single peak
-                                if (peak1 == null)
-                                {
-                                    singlePeak = peak2;
-                                }
-                                else
-                                {
-                                    singlePeak = peak1;
-                                }
-                                singlePeakIntensity = singlePeak.GetDenormalizedIntensity(injectionTime);
+        //                        // Find the single peak
+        //                        if (peak1 == null)
+        //                        {
+        //                            singlePeak = peak2;
+        //                        }
+        //                        else
+        //                        {
+        //                            singlePeak = peak1;
+        //                        }
+        //                        singlePeakIntensity = singlePeak.GetDenormalizedIntensity(injectionTime);
 
-                                // Sort the peptide's other pairs (complete and incomplete) based on their intensities relative to the single peak
-                                lowerIntensity = new List<IsotopePair>();
-                                higherIntensity = new List<IsotopePair>();
-                                for (int a = 0; a < pairs.Count(); a++)
-                                {
-                                    otherPair = pairs[a];
-                                    for (int h = 0; h < numChannels; h += numIsotopologues)
-                                    {
-                                        for (int s = 0; s < numIsotopes; s++)
-                                        {
-                                            otherPeak1 = otherPair.peaks[h, s];
-                                            otherPeak2 = otherPair.peaks[h + 1, s];
+        //                        // Sort the peptide's other pairs (complete and incomplete) based on their intensities relative to the single peak
+        //                        lowerIntensity = new List<IsotopePair>();
+        //                        higherIntensity = new List<IsotopePair>();
+        //                        for (int a = 0; a < pairs.Count(); a++)
+        //                        {
+        //                            otherPair = pairs[a];
+        //                            for (int h = 0; h < numChannels; h += numIsotopologues)
+        //                            {
+        //                                for (int s = 0; s < numIsotopes; s++)
+        //                                {
+        //                                    otherPeak1 = otherPair.peaks[h, s];
+        //                                    otherPeak2 = otherPair.peaks[h + 1, s];
 
-                                            //Both channels present
-                                            if (otherPeak1 != null && otherPeak2 != null)
-                                            {
-                                                isotopePair = new IsotopePair(otherPair, s, otherPeak1.X, otherPeak1.GetDenormalizedIntensity(injectionTime), otherPeak2.X, otherPeak2.GetDenormalizedIntensity(injectionTime));
-                                                if (isotopePair.intensity <= singlePeakIntensity)
-                                                {
-                                                    lowerIntensity.Add(isotopePair);
-                                                }
-                                                else
-                                                {
-                                                    higherIntensity.Add(isotopePair);
-                                                }
-                                            }
-                                            else if (otherPeak1 == null && otherPeak2 == null)
-                                            {
+        //                                    //Both channels present
+        //                                    if (otherPeak1 != null && otherPeak2 != null)
+        //                                    {
+        //                                        isotopePair = new IsotopePair(otherPair, s, otherPeak1.X, otherPeak1.GetDenormalizedIntensity(injectionTime), otherPeak2.X, otherPeak2.GetDenormalizedIntensity(injectionTime));
+        //                                        if (isotopePair.intensity <= singlePeakIntensity)
+        //                                        {
+        //                                            lowerIntensity.Add(isotopePair);
+        //                                        }
+        //                                        else
+        //                                        {
+        //                                            higherIntensity.Add(isotopePair);
+        //                                        }
+        //                                    }
+        //                                    else if (otherPeak1 == null && otherPeak2 == null)
+        //                                    {
 
-                                            }
-                                            //One channel present
-                                            else
-                                            {
-                                                if (otherPeak1 != null)
-                                                {
-                                                    isotopePair = new IsotopePair(otherPair, s, otherPeak1.X, otherPeak1.GetDenormalizedIntensity(injectionTime), 0, 0);
-                                                    if (isotopePair.intensity <= singlePeakIntensity)
-                                                    {
-                                                        lowerIntensity.Add(isotopePair);
-                                                    }
-                                                    else
-                                                    {
-                                                        higherIntensity.Add(isotopePair);
-                                                    }
-                                                }
-                                                if (otherPeak2 != null)
-                                                {
-                                                    isotopePair = new IsotopePair(otherPair, s, otherPeak2.X, otherPeak2.GetDenormalizedIntensity(injectionTime), 0, 0);
-                                                    if (isotopePair.intensity <= singlePeakIntensity)
-                                                    {
-                                                        lowerIntensity.Add(isotopePair);
-                                                    }
-                                                    else
-                                                    {
-                                                        higherIntensity.Add(isotopePair);
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+        //                                    }
+        //                                    //One channel present
+        //                                    else
+        //                                    {
+        //                                        if (otherPeak1 != null)
+        //                                        {
+        //                                            isotopePair = new IsotopePair(otherPair, s, otherPeak1.X, otherPeak1.GetDenormalizedIntensity(injectionTime), 0, 0);
+        //                                            if (isotopePair.intensity <= singlePeakIntensity)
+        //                                            {
+        //                                                lowerIntensity.Add(isotopePair);
+        //                                            }
+        //                                            else
+        //                                            {
+        //                                                higherIntensity.Add(isotopePair);
+        //                                            }
+        //                                        }
+        //                                        if (otherPeak2 != null)
+        //                                        {
+        //                                            isotopePair = new IsotopePair(otherPair, s, otherPeak2.X, otherPeak2.GetDenormalizedIntensity(injectionTime), 0, 0);
+        //                                            if (isotopePair.intensity <= singlePeakIntensity)
+        //                                            {
+        //                                                lowerIntensity.Add(isotopePair);
+        //                                            }
+        //                                            else
+        //                                            {
+        //                                                higherIntensity.Add(isotopePair);
+        //                                            }
+        //                                        }
+        //                                    }
+        //                                }
+        //                            }
+        //                        }
 
-                                // Calculate the missing channel frequencies for pairs both lower and higher in intensity than the single peak
-                                lowerFrequency = 0;
-                                int lowerCount = 0;
-                                for (int l = 0; l < lowerIntensity.Count(); l++)
-                                {
-                                    if (lowerIntensity[l].missingChannel)
-                                    {
-                                        lowerCount++;
-                                    }
-                                }
-                                lowerFrequency = (double)lowerCount / (double)lowerIntensity.Count();
+        //                        // Calculate the missing channel frequencies for pairs both lower and higher in intensity than the single peak
+        //                        lowerFrequency = 0;
+        //                        int lowerCount = 0;
+        //                        for (int l = 0; l < lowerIntensity.Count(); l++)
+        //                        {
+        //                            if (lowerIntensity[l].missingChannel)
+        //                            {
+        //                                lowerCount++;
+        //                            }
+        //                        }
+        //                        lowerFrequency = (double)lowerCount / (double)lowerIntensity.Count();
 
-                                higherFrequency = 0;
-                                int higherCount = 0;
-                                for (int l = 0; l < higherIntensity.Count(); l++)
-                                {
-                                    if (higherIntensity[l].missingChannel)
-                                    {
-                                        higherCount++;
-                                    }
-                                }
-                                higherFrequency = (double)higherCount / (double)higherIntensity.Count();
+        //                        higherFrequency = 0;
+        //                        int higherCount = 0;
+        //                        for (int l = 0; l < higherIntensity.Count(); l++)
+        //                        {
+        //                            if (higherIntensity[l].missingChannel)
+        //                            {
+        //                                higherCount++;
+        //                            }
+        //                        }
+        //                        higherFrequency = (double)higherCount / (double)higherIntensity.Count();
 
-                                // A peak is deemed coalesced if the frequency of a missing channel is at least 1.5-fold greater for the more intense pairs than the less intense (each category must have at least 2 contributing pairs)
-                                if (lowerIntensity.Count() > 1 && higherIntensity.Count() > 1 && higherFrequency / lowerFrequency > 1.5)
-                                {
-                                    coalescenceDetected = true;
-                                    if (coalescedPeakIntensities == null)
-                                    {
-                                        coalescedPeakIntensities = new List<double>();
-                                    }
-                                    else
-                                    {
-                                        // Keep track of peak intensities that are deemed to be coalesced
-                                        coalescedPeakIntensities.Add(singlePeakIntensity);
-                                    }
+        //                        // A peak is deemed coalesced if the frequency of a missing channel is at least 1.5-fold greater for the more intense pairs than the less intense (each category must have at least 2 contributing pairs)
+        //                        if (lowerIntensity.Count() > 1 && higherIntensity.Count() > 1 && higherFrequency / lowerFrequency > 1.5)
+        //                        {
+        //                            coalescenceDetected = true;
+        //                            if (coalescedPeakIntensities == null)
+        //                            {
+        //                                coalescedPeakIntensities = new List<double>();
+        //                            }
+        //                            else
+        //                            {
+        //                                // Keep track of peak intensities that are deemed to be coalesced
+        //                                coalescedPeakIntensities.Add(singlePeakIntensity);
+        //                            }
 
-                                    // Set single peak to null
-                                    if (peak1 == null)
-                                    {
-                                        pair.peaks[c + 1, j] = null;
-                                    }
-                                    if (peak2 == null)
-                                    {
-                                        pair.peaks[c, j] = null;
-                                    }
-                                }
-                            }
-                        }
+        //                            // Set single peak to null
+        //                            if (peak1 == null)
+        //                            {
+        //                                pair.peaks[c + 1, j] = null;
+        //                            }
+        //                            if (peak2 == null)
+        //                            {
+        //                                pair.peaks[c, j] = null;
+        //                            }
+        //                        }
+        //                    }
+        //                }
 
-                        if (numIsotopologues == 4)
-                        {
-                            peak1 = pair.peaks[c, j];
-                            peak2 = pair.peaks[c + 1, j];
-                            peak3 = pair.peaks[c + 2, j];
-                            peak4 = pair.peaks[c + 3, j];
+        //                if (numIsotopologues == 4)
+        //                {
+        //                    peak1 = pair.peaks[c, j];
+        //                    peak2 = pair.peaks[c + 1, j];
+        //                    peak3 = pair.peaks[c + 2, j];
+        //                    peak4 = pair.peaks[c + 3, j];
 
-                            // Do nothing for complete pairs, null pairs, or pairs below the intensity threshold
-                            if (peak1 != null && peak2 != null && peak3 != null && peak4 != null)
-                            {
+        //                    // Do nothing for complete pairs, null pairs, or pairs below the intensity threshold
+        //                    if (peak1 != null && peak2 != null && peak3 != null && peak4 != null)
+        //                    {
                                 
-                            }
-                            else if (peak1 == null && peak2 == null && peak3 == null && peak4 == null)
-                            {
+        //                    }
+        //                    else if (peak1 == null && peak2 == null && peak3 == null && peak4 == null)
+        //                    {
                                 
-                            }
-                            //else if (log10MaxIntensity <= System.Math.Log10(Form1.MAXIMUMDNL))
-                            //{
+        //                    }
+        //                    //else if (log10MaxIntensity <= System.Math.Log10(Form1.MAXIMUMDNL))
+        //                    //{
                                 
-                            //}
-                            // Proceed with all other pairs
-                            else 
-                            {
-                                ILabeledPeak otherPeak1;
-                                ILabeledPeak otherPeak2;
-                                ILabeledPeak otherPeak3;
-                                ILabeledPeak otherPeak4;
-                                double presentPeaksTotalIntensity = 0;
-                                int presentPeaksCount = 0;
-                                double presentPeaksIntensity = 0;
+        //                    //}
+        //                    // Proceed with all other pairs
+        //                    else 
+        //                    {
+        //                        ILabeledPeak otherPeak1;
+        //                        ILabeledPeak otherPeak2;
+        //                        ILabeledPeak otherPeak3;
+        //                        ILabeledPeak otherPeak4;
+        //                        double presentPeaksTotalIntensity = 0;
+        //                        int presentPeaksCount = 0;
+        //                        double presentPeaksIntensity = 0;
 
-                                // Calculate the maximum intensity of all present peaks
-                                if (peak1 != null)
-                                {
-                                    if (peak1.GetDenormalizedIntensity(injectionTime) > presentPeaksIntensity)
-                                    {
-                                        presentPeaksTotalIntensity += peak1.GetDenormalizedIntensity(injectionTime);
-                                        presentPeaksCount++;
-                                    }
-                                }
-                                if (peak2 != null)
-                                {
-                                    if (peak2.GetDenormalizedIntensity(injectionTime) > presentPeaksIntensity)
-                                    {
-                                        presentPeaksTotalIntensity += peak2.GetDenormalizedIntensity(injectionTime);
-                                        presentPeaksCount++;
-                                    }
-                                }
-                                if (peak3 != null)
-                                {
-                                    if (peak3.GetDenormalizedIntensity(injectionTime) > presentPeaksIntensity)
-                                    {
-                                        presentPeaksTotalIntensity = peak3.GetDenormalizedIntensity(injectionTime);
-                                        presentPeaksCount++;
-                                    }
-                                }
-                                if (peak4 != null)
-                                {
-                                    if (peak4.GetDenormalizedIntensity(injectionTime) > presentPeaksIntensity)
-                                    {
-                                        presentPeaksTotalIntensity = peak4.GetDenormalizedIntensity(injectionTime);
-                                        presentPeaksCount++;
-                                    }
-                                }
+        //                        // Calculate the maximum intensity of all present peaks
+        //                        if (peak1 != null)
+        //                        {
+        //                            if (peak1.GetDenormalizedIntensity(injectionTime) > presentPeaksIntensity)
+        //                            {
+        //                                presentPeaksTotalIntensity += peak1.GetDenormalizedIntensity(injectionTime);
+        //                                presentPeaksCount++;
+        //                            }
+        //                        }
+        //                        if (peak2 != null)
+        //                        {
+        //                            if (peak2.GetDenormalizedIntensity(injectionTime) > presentPeaksIntensity)
+        //                            {
+        //                                presentPeaksTotalIntensity += peak2.GetDenormalizedIntensity(injectionTime);
+        //                                presentPeaksCount++;
+        //                            }
+        //                        }
+        //                        if (peak3 != null)
+        //                        {
+        //                            if (peak3.GetDenormalizedIntensity(injectionTime) > presentPeaksIntensity)
+        //                            {
+        //                                presentPeaksTotalIntensity = peak3.GetDenormalizedIntensity(injectionTime);
+        //                                presentPeaksCount++;
+        //                            }
+        //                        }
+        //                        if (peak4 != null)
+        //                        {
+        //                            if (peak4.GetDenormalizedIntensity(injectionTime) > presentPeaksIntensity)
+        //                            {
+        //                                presentPeaksTotalIntensity = peak4.GetDenormalizedIntensity(injectionTime);
+        //                                presentPeaksCount++;
+        //                            }
+        //                        }
 
-                                presentPeaksIntensity = presentPeaksTotalIntensity / ((double)presentPeaksCount);
+        //                        presentPeaksIntensity = presentPeaksTotalIntensity / ((double)presentPeaksCount);
 
-                                // Sort the peptide's other pairs (either both or one channel present) based on their intensities relative to the single peak
-                                lowerIntensity = new List<IsotopePair>();
-                                higherIntensity = new List<IsotopePair>();
-                                Pair otherPair;
-                                for (int a = 0; a < pairs.Count(); a++)
-                                {
-                                    otherPair = pairs[a];
-                                    for (int h = 0; h < numChannels; h += numIsotopologues)
-                                    {
-                                        for (int s = 0; s < numIsotopes; s++)
-                                        {
-                                            otherPeak1 = otherPair.peaks[h, s];
-                                            otherPeak2 = otherPair.peaks[h + 1, s];
-                                            otherPeak3 = otherPair.peaks[h + 2, s];
-                                            otherPeak4 = otherPair.peaks[h + 3, s];
+        //                        // Sort the peptide's other pairs (either both or one channel present) based on their intensities relative to the single peak
+        //                        lowerIntensity = new List<IsotopePair>();
+        //                        higherIntensity = new List<IsotopePair>();
+        //                        Pair otherPair;
+        //                        for (int a = 0; a < pairs.Count(); a++)
+        //                        {
+        //                            otherPair = pairs[a];
+        //                            for (int h = 0; h < numChannels; h += numIsotopologues)
+        //                            {
+        //                                for (int s = 0; s < numIsotopes; s++)
+        //                                {
+        //                                    otherPeak1 = otherPair.peaks[h, s];
+        //                                    otherPeak2 = otherPair.peaks[h + 1, s];
+        //                                    otherPeak3 = otherPair.peaks[h + 2, s];
+        //                                    otherPeak4 = otherPair.peaks[h + 3, s];
 
-                                            // All channels present
-                                            if (otherPeak1 != null && otherPeak2 != null && otherPeak3 != null && otherPeak4 != null)
-                                            {
-                                                isotopePair = new IsotopePair(otherPair, s, otherPeak1.X, otherPeak1.GetDenormalizedIntensity(injectionTime), otherPeak2.X, otherPeak2.GetDenormalizedIntensity(injectionTime), otherPeak3.X, otherPeak3.GetDenormalizedIntensity(injectionTime), otherPeak4.X, otherPeak4.GetDenormalizedIntensity(injectionTime));
-                                                if (isotopePair.intensity <= presentPeaksIntensity)
-                                                {
-                                                    lowerIntensity.Add(isotopePair);
-                                                }
-                                                else
-                                                {
-                                                    higherIntensity.Add(isotopePair);
-                                                }
-                                            }
-                                            // No channels present
-                                            else if (otherPeak1 == null && otherPeak2 == null && otherPeak3 == null && otherPeak4 == null)
-                                            {
-                                                // Do nothing
-                                            }
-                                            // Incomplete pairs -- set null peaks to blank peaks
-                                            else
-                                            {
-                                                MZPeak blank = new MZPeak(0,0);
+        //                                    // All channels present
+        //                                    if (otherPeak1 != null && otherPeak2 != null && otherPeak3 != null && otherPeak4 != null)
+        //                                    {
+        //                                        isotopePair = new IsotopePair(otherPair, s, otherPeak1.X, otherPeak1.GetDenormalizedIntensity(injectionTime), otherPeak2.X, otherPeak2.GetDenormalizedIntensity(injectionTime), otherPeak3.X, otherPeak3.GetDenormalizedIntensity(injectionTime), otherPeak4.X, otherPeak4.GetDenormalizedIntensity(injectionTime));
+        //                                        if (isotopePair.intensity <= presentPeaksIntensity)
+        //                                        {
+        //                                            lowerIntensity.Add(isotopePair);
+        //                                        }
+        //                                        else
+        //                                        {
+        //                                            higherIntensity.Add(isotopePair);
+        //                                        }
+        //                                    }
+        //                                    // No channels present
+        //                                    else if (otherPeak1 == null && otherPeak2 == null && otherPeak3 == null && otherPeak4 == null)
+        //                                    {
+        //                                        // Do nothing
+        //                                    }
+        //                                    // Incomplete pairs -- set null peaks to blank peaks
+        //                                    else
+        //                                    {
+        //                                        MZPeak blank = new MZPeak(0,0);
 
-                                                if (otherPeak1 == null)
-                                                {
-                                                    otherPeak1 = (ILabeledPeak)blank;
-                                                }
-                                                if (otherPeak2 == null)
-                                                {
-                                                    otherPeak2 = (ILabeledPeak)blank;
-                                                }
-                                                if (otherPeak3 == null)
-                                                {
-                                                    otherPeak3 = (ILabeledPeak)blank;
-                                                }
-                                                if (otherPeak4 == null)
-                                                {
-                                                    otherPeak4 = (ILabeledPeak)blank;
-                                                }
+        //                                        if (otherPeak1 == null)
+        //                                        {
+        //                                            otherPeak1 = (ILabeledPeak)blank;
+        //                                        }
+        //                                        if (otherPeak2 == null)
+        //                                        {
+        //                                            otherPeak2 = (ILabeledPeak)blank;
+        //                                        }
+        //                                        if (otherPeak3 == null)
+        //                                        {
+        //                                            otherPeak3 = (ILabeledPeak)blank;
+        //                                        }
+        //                                        if (otherPeak4 == null)
+        //                                        {
+        //                                            otherPeak4 = (ILabeledPeak)blank;
+        //                                        }
 
-                                                isotopePair = new IsotopePair(otherPair, s, otherPeak1.X, otherPeak1.GetDenormalizedIntensity(injectionTime), otherPeak2.X, otherPeak2.GetDenormalizedIntensity(injectionTime), otherPeak3.X, otherPeak3.GetDenormalizedIntensity(injectionTime), otherPeak4.X, otherPeak4.GetDenormalizedIntensity(injectionTime));
-                                                if (isotopePair.intensity <= presentPeaksIntensity)
-                                                {
-                                                    lowerIntensity.Add(isotopePair);
-                                                }
-                                                else
-                                                {
-                                                    higherIntensity.Add(isotopePair);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+        //                                        isotopePair = new IsotopePair(otherPair, s, otherPeak1.X, otherPeak1.GetDenormalizedIntensity(injectionTime), otherPeak2.X, otherPeak2.GetDenormalizedIntensity(injectionTime), otherPeak3.X, otherPeak3.GetDenormalizedIntensity(injectionTime), otherPeak4.X, otherPeak4.GetDenormalizedIntensity(injectionTime));
+        //                                        if (isotopePair.intensity <= presentPeaksIntensity)
+        //                                        {
+        //                                            lowerIntensity.Add(isotopePair);
+        //                                        }
+        //                                        else
+        //                                        {
+        //                                            higherIntensity.Add(isotopePair);
+        //                                        }
+        //                                    }
+        //                                }
+        //                            }
+        //                        }
 
-                                // Calculate the missing channel frequencies for pairs both lower and higher in intensity than the single peak
-                                lowerFrequency = 0;
-                                int lowerCount = 0;
-                                for (int l = 0; l < lowerIntensity.Count(); l++)
-                                {
-                                    if (lowerIntensity[l].missingChannel)
-                                    {
-                                        lowerCount++;
-                                    }
-                                }
-                                lowerFrequency = (double)lowerCount / (double)lowerIntensity.Count();
+        //                        // Calculate the missing channel frequencies for pairs both lower and higher in intensity than the single peak
+        //                        lowerFrequency = 0;
+        //                        int lowerCount = 0;
+        //                        for (int l = 0; l < lowerIntensity.Count(); l++)
+        //                        {
+        //                            if (lowerIntensity[l].missingChannel)
+        //                            {
+        //                                lowerCount++;
+        //                            }
+        //                        }
+        //                        lowerFrequency = (double)lowerCount / (double)lowerIntensity.Count();
 
-                                higherFrequency = 0;
-                                int higherCount = 0;
-                                for (int l = 0; l < higherIntensity.Count(); l++)
-                                {
-                                    if (higherIntensity[l].missingChannel)
-                                    {
-                                        higherCount++;
-                                    }
-                                }
-                                higherFrequency = (double)higherCount / (double)higherIntensity.Count();
+        //                        higherFrequency = 0;
+        //                        int higherCount = 0;
+        //                        for (int l = 0; l < higherIntensity.Count(); l++)
+        //                        {
+        //                            if (higherIntensity[l].missingChannel)
+        //                            {
+        //                                higherCount++;
+        //                            }
+        //                        }
+        //                        higherFrequency = (double)higherCount / (double)higherIntensity.Count();
 
-                                // A pair is deemed coalesced if the frequency of a missing channel is at least 1.5-fold greater for the more intense pairs than the less intense (each category must have at least 2 contributing pairs)
-                                if (lowerIntensity.Count() > 1 && higherIntensity.Count() > 1 && higherFrequency / lowerFrequency > 1.5)
-                                {
-                                    coalescenceDetected = true;
-                                    if (coalescedPeakIntensities == null)
-                                    {
-                                        coalescedPeakIntensities = new List<double>();
-                                    }
-                                    else
-                                    {
-                                        coalescedPeakIntensities.Add(presentPeaksIntensity);
-                                    }
+        //                        // A pair is deemed coalesced if the frequency of a missing channel is at least 1.5-fold greater for the more intense pairs than the less intense (each category must have at least 2 contributing pairs)
+        //                        if (lowerIntensity.Count() > 1 && higherIntensity.Count() > 1 && higherFrequency / lowerFrequency > 1.5)
+        //                        {
+        //                            coalescenceDetected = true;
+        //                            if (coalescedPeakIntensities == null)
+        //                            {
+        //                                coalescedPeakIntensities = new List<double>();
+        //                            }
+        //                            else
+        //                            {
+        //                                coalescedPeakIntensities.Add(presentPeaksIntensity);
+        //                            }
 
-                                    // Set single peaks to null for a coalesced pair
-                                    pair.peaks[c, j] = null;
-                                    pair.peaks[c + 1, j] = null;
-                                    pair.peaks[c + 2, j] = null;
-                                    pair.peaks[c + 3, j] = null;
-                                }
-                            }
-                        }
-                    } // End channel loop
-                } // End isotope loop
-            } // End pair loop
-        }
+        //                            // Set single peaks to null for a coalesced pair
+        //                            pair.peaks[c, j] = null;
+        //                            pair.peaks[c + 1, j] = null;
+        //                            pair.peaks[c + 2, j] = null;
+        //                            pair.peaks[c + 3, j] = null;
+        //                        }
+        //                    }
+        //                }
+        //            } // End channel loop
+        //        } // End isotope loop
+        //    } // End pair loop
+        //}
 
         /* Checks the pair spacing to make sure it falls within the spacing tolerance
          */
@@ -3504,21 +4372,18 @@ namespace Coon.NeuQuant
             int charge = bestPSMs[rawFile].Charge;
             List<Pair> pairs;
             allPairs.TryGetValue(rawFile, out pairs);
-            Pair pair;
             int peakCount;
             bool[,] spacingChecks;
             bool spacingChecked;
 
-            if (numIsotopologues < 2 && numClusterLabels > 0)
+            if (numIsotopologues < 2 && clusterLabel)
             {
-                for (int i = 0; i < pairs.Count; i++)
+                foreach (Pair pair in pairs)
                 {
-                    pair = pairs[i];
-
-                    for (int k = 0; k < numIsotopes; k++)
+                    foreach (IsotopePair isotopePair in pair.IsotopePairs)
                     {
-                        peakCount = pair.peakCount[0, k]; ;
-                        spacingChecks = pair.GetSpacingCheckArray(0, k);
+                        peakCount = isotopePair.TotalPeakCount;
+                        spacingChecks = isotopePair.GetSpacingCheckArray();
 
                         for (int j = 0; j < numChannels; j++)
                         {
@@ -3527,10 +4392,10 @@ namespace Coon.NeuQuant
                             {
                                 if (spacingChecks[j, c]) spacingChecked = true;
                             }
-                            if (pair.peaks[j, k] != null && !spacingChecked)
+                            if (isotopePair.ChannelPeaks[j] != null && !spacingChecked)
                             {
                                 peakCount--;
-                                pair.peaks[j, k] = null;
+                                isotopePair.ChannelPeaks[j] = null;
                             }
                         }
 
@@ -3538,24 +4403,22 @@ namespace Coon.NeuQuant
                         {
                             for (int j = 0; j < numChannels; j++)
                             {
-                                pair.peaks[j, k] = null;
+                                isotopePair.ChannelPeaks[j] = null;
                             }
                         }
                     }
                 }
             }
-            else if (numIsotopologues > 1 && numIsotopologueLabels > 0)
+            else if (numIsotopologues > 1 && isotopologueLabel)
             {
-                for (int i = 0; i < pairs.Count; i++)
+                foreach (Pair pair in pairs)
                 {
-                    pair = pairs[i];
-
-                    for (int c = 0; c < numClusters; c++)
+                    foreach (IsotopePair isotopePair in pair.IsotopePairs)
                     {
-                        for (int k = 0; k < numIsotopes; k++)
+                        for (int c = 0; c < numClusters; c++)
                         {
-                            peakCount = pair.peakCount[c, k];
-                            spacingChecks = pair.GetSpacingCheckArray(c, k);
+                            peakCount = isotopePair.PeakCountByCluster[c];
+                            spacingChecks = isotopePair.GetSpacingCheckArray(c);
                             int channelIndex = c * numIsotopologues;
 
                             for (int j = 0; j < numIsotopologues; j++)
@@ -3565,10 +4428,10 @@ namespace Coon.NeuQuant
                                 {
                                     if (spacingChecks[j, m]) spacingChecked = true;
                                 }
-                                if (pair.peaks[j + channelIndex, k] != null && !spacingChecked)
+                                if (isotopePair.ChannelPeaks[j + channelIndex] != null && !spacingChecked)
                                 {
                                     peakCount--;
-                                    pair.peaks[j + channelIndex, k] = null;
+                                    isotopePair.ChannelPeaks[j + channelIndex] = null;
                                 }
                             }
 
@@ -3576,12 +4439,58 @@ namespace Coon.NeuQuant
                             {
                                 for (int j = channelIndex; j < channelIndex + numIsotopologues; j++)
                                 {
-                                    pair.peaks[j, k] = null;
+                                    isotopePair.ChannelPeaks[j] = null;
                                 }
                             }
                         }
                     }
                 }
+            }
+
+            List<Pair> spacingsCheckedList = new List<Pair>();
+            List<Pair> completePairList = null;
+            completePairs.TryGetValue(rawFile, out completePairList);
+
+            if (numIsotopologues > 1 && numClusters > 1)
+            {
+                foreach (Pair currentPair in pairs)
+                {
+                    foreach (IsotopePair currentIsotopePair in currentPair.IsotopePairs)
+                    {
+                        for (int c = 0; c < numClusters; c++)
+                        {
+                            if (currentIsotopePair.CompleteByCluster[c])
+                            {
+                                completePairList = addPairToList(completePairList, currentIsotopePair, c, rawFile);
+                            }
+                            else if (currentIsotopePair.PeakCountByCluster[c] >= peaksNeeded)
+                            {
+                                spacingsCheckedList = addPairToList(spacingsCheckedList, currentIsotopePair, c, rawFile);
+                            }
+                        }
+                    }
+                }
+                completePairs[rawFile] = completePairList;
+                allPairs[rawFile] = spacingsCheckedList;
+            }
+            else
+            {
+                foreach (Pair currentPair in pairs)
+                {
+                    foreach (IsotopePair currentIsotopePair in currentPair.IsotopePairs)
+                    {
+                        if (currentIsotopePair.Complete)
+                        {
+                            completePairList = addPairToList(completePairList, currentIsotopePair, 0, rawFile);
+                        }
+                        else if (currentIsotopePair.TotalPeakCount >= peaksNeeded)
+                        {
+                            spacingsCheckedList = addPairToList(spacingsCheckedList, currentIsotopePair, 0, rawFile);
+                        }
+                    }
+                }
+                completePairs[rawFile] = completePairList;
+                allPairs[rawFile] = spacingsCheckedList;
             }
 
                     //if (numChannels == 2)
@@ -6818,52 +7727,6 @@ namespace Coon.NeuQuant
             //        }
             //    }
             //}
-
-            List<Pair> spacingsCheckedList = new List<Pair>();
-            List<Pair> completePairList = null;
-            completePairs.TryGetValue(rawFile, out completePairList);
-
-            if (numIsotopologues > 1)
-            {
-                foreach (Pair currentPair in pairs)
-                {
-                    for (int c = 0; c < numClusters; c++)
-                    {
-                        for (int i = 0; i < numIsotopes; i++)
-                        {
-                            if (currentPair.complete[c, i])
-                            {
-                                completePairList = addPairToList(completePairList, currentPair, c, i, rawFile);
-                            }
-                            else if (currentPair.peakCount[c, i] >= peaksNeeded)
-                            {
-                                spacingsCheckedList = addPairToList(spacingsCheckedList, currentPair, c, i, rawFile);
-                            }
-                        }
-                    }
-                }
-                completePairs[rawFile] = completePairList;
-                allPairs[rawFile] = spacingsCheckedList;
-            }
-            else
-            {
-                foreach (Pair currentPair in pairs)
-                {
-                    for (int i = 0; i < numIsotopes; i++)
-                    {
-                        if (currentPair.complete[0, i])
-                        {
-                            completePairList = addPairToList(completePairList, currentPair, 0, i, rawFile);
-                        }
-                        else if (currentPair.peakCount[0, i] >= peaksNeeded)
-                        {
-                            spacingsCheckedList = addPairToList(completePairList, currentPair, 0, i, rawFile);
-                        }
-                    }
-                }
-                completePairs[rawFile] = completePairList;
-                allPairs[rawFile] = spacingsCheckedList;
-            }
             
             // When noise-band capping not enabled, add pairs to complete list
             //if (!Form1.NOISEBANDCAP)
@@ -6926,65 +7789,65 @@ namespace Coon.NeuQuant
             //}
         }
 
-        public void checkIsotopeDistribution(MSDataFile rawFile, List<Pair> pairs)
-        {            
-            List<Pair> goodIsotopeDistributionPairs = new List<Pair>();
+        //public void checkIsotopeDistribution(MSDataFile rawFile, List<Pair> pairs)
+        //{
+        //    List<Pair> goodIsotopeDistributionPairs = new List<Pair>();
 
-            if (numIsotopologues > 1)
-            {
-                foreach (Pair pair in pairs)
-                {
-                    for (int c = 0; c < numClusters; c++)
-                    {
-                        if (numIsotopes > 1 && pair.checkIsotopeDistribution(c))
-                        {
-                            for (int j = 0; j < numIsotopes; j++)
-                            {
-                                if (pair.peakCount[c, j] < peaksNeeded)
-                                {
-                                    int channelIndex = c * numIsotopologues;
-                                    for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
-                                    {
-                                        pair.peaks[i, j] = null;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if (pair.totalPeakCount > 0)
-                    {
-                        goodIsotopeDistributionPairs.Add(pair);
-                    }
-                }
-            }
-            else
-            {
-                foreach (Pair pair in pairs)
-                {
-                    for (int c = 0; c < numChannels; c++)
-                    {
-                        pair.checkIsotopeDistribution(c);
-                    }
+        //    if (numIsotopologues > 1)
+        //    {
+        //        foreach (Pair pair in pairs)
+        //        {
+        //            for (int c = 0; c < numClusters; c++)
+        //            {
+        //                if (numIsotopes > 1 && pair.checkIsotopeDistribution(c))
+        //                {
+        //                    for (int j = 0; j < numIsotopes; j++)
+        //                    {
+        //                        if (pair.peakCount[c, j] < peaksNeeded)
+        //                        {
+        //                            int channelIndex = c * numIsotopologues;
+        //                            for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+        //                            {
+        //                                pair.peaks[i, j] = null;
+        //                            }
+        //                        }
+        //                    }
+        //                }
+        //            }
+        //            if (pair.totalPeakCount > 0)
+        //            {
+        //                goodIsotopeDistributionPairs.Add(pair);
+        //            }
+        //        }
+        //    }
+        //    else
+        //    {
+        //        foreach (Pair pair in pairs)
+        //        {
+        //            for (int c = 0; c < numChannels; c++)
+        //            {
+        //                pair.checkIsotopeDistribution(c);
+        //            }
 
-                    for (int j = 0; j < numIsotopes; j++)
-                    {
-                        if (pair.peakCount[0, j] < peaksNeeded)
-                        {
-                            for (int c = 0; c < numChannels; c++)
-                            {
-                                pair.peaks[c, j] = null;
-                            }
-                        }
-                    }
+        //            for (int j = 0; j < numIsotopes; j++)
+        //            {
+        //                if (pair.peakCount[0, j] < peaksNeeded)
+        //                {
+        //                    for (int c = 0; c < numChannels; c++)
+        //                    {
+        //                        pair.peaks[c, j] = null;
+        //                    }
+        //                }
+        //            }
 
-                    if (pair.totalPeakCount > 0)
-                    {
-                        goodIsotopeDistributionPairs.Add(pair);
-                    }
-                }
-            }
-            allPairs[rawFile] = goodIsotopeDistributionPairs;
-        }
+        //            if (pair.totalPeakCount > 0)
+        //            {
+        //                goodIsotopeDistributionPairs.Add(pair);
+        //            }
+        //        }
+        //    }
+        //    allPairs[rawFile] = goodIsotopeDistributionPairs;
+        //}
 
         public void sortPairs(MSDataFile rawFile)
         {
@@ -6994,7 +7857,7 @@ namespace Coon.NeuQuant
             if (allPairs.TryGetValue(rawFile, out associatedPairs))
             {
                 // NeuCode quantification
-                if (numIsotopologues > 1)
+                if (numIsotopologues > 1 && numIsotopologues < 6)
                 {
                     for (int c = 0; c < numClusters; c++)
                     {
@@ -7019,22 +7882,19 @@ namespace Coon.NeuQuant
 
                             foreach (Pair pair in associatedPairs)
                             {
-                                for (int j = 0; j < numIsotopes; j++)
+                                foreach (IsotopePair isotopePair in pair.IsotopePairs)
                                 {
-                                    if (pair.peakCount[c, j] >= peaksNeeded && pair.peakCount[c, j] < numIsotopologues && pair.peakPattern[c, j] >= 0)
+                                    if (isotopePair.PeakCountByCluster[c] >= peaksNeeded && isotopePair.PeakCountByCluster[c] < numIsotopologues && isotopePair.PeakPattern[c] >= 0)
                                     {
-                                        Pair cleanedPair = new Pair(pair.parent, pair.rawFile, pair.scanNumber, pair.injectionTime, pair.retentionTime);
+                                        IsotopePair cleanedPair = new IsotopePair(isotopePair.Parent, isotopePair.Isotope);
                                         for (int i = 0; i < numChannels; i++)
                                         {
-                                            for (int k = 0; k < numIsotopes; k++)
+                                            if (i >= channelIndex && i < channelIndex + numIsotopologues)
                                             {
-                                                if (k == j && i >= channelIndex && i < channelIndex + numIsotopologues)
-                                                {
-                                                    cleanedPair.peaks[i, k] = pair.peaks[i, k];
-                                                }
+                                                cleanedPair.ChannelPeaks[i] = isotopePair.ChannelPeaks[i];
                                             }
                                         }
-                                        pairPatterns[pair.peakCount[c, j], pair.peakPattern[c, j]].PatternPairs.Add(cleanedPair);
+                                        pairPatterns[isotopePair.PeakCountByCluster[c], isotopePair.PeakPattern[c]].PatternPairs.Add(cleanedPair);
                                     }
                                 }
                             }
@@ -7094,9 +7954,18 @@ namespace Coon.NeuQuant
                                 missingChannelPattern[c, 0] = bestNumPeaks;
                                 missingChannelPattern[c, 1] = bestPatternPossibilities;
 
-                                foreach (Pair pair in pairPatterns[bestNumPeaks, bestPatternPossibilities].PatternPairs)
+                                foreach (IsotopePair isotopePair in pairPatterns[bestNumPeaks, bestPatternPossibilities].PatternPairs)
                                 {
-                                    newAllPairs.Add(pair);
+                                    if (!newAllPairs.Contains(isotopePair.Parent))
+                                    {
+                                        Pair pairToAdd = new Pair(this, rawFile, isotopePair.Parent.ScanNumber, isotopePair.Parent.Charge, isotopePair.Parent.InjectionTime, isotopePair.Parent.RetentionTime);
+                                        pairToAdd.IsotopePairs.Add(isotopePair);
+                                        newAllPairs.Add(pairToAdd);
+                                    }
+                                    else
+                                    {
+                                        newAllPairs.Find(pair => pair.ScanNumber == isotopePair.Parent.ScanNumber).IsotopePairs.Add(isotopePair);
+                                    }
                                 }
                             }
 
@@ -7214,7 +8083,7 @@ namespace Coon.NeuQuant
                     }
                 }
                 // Non-NeuCode quantification
-                else
+                else if (numIsotopologues < 2)
                 {
                     List<Pair> newAllPairs = new List<Pair>();
 
@@ -7236,22 +8105,16 @@ namespace Coon.NeuQuant
 
                         foreach (Pair pair in associatedPairs)
                         {
-                            for (int j = 0; j < numIsotopes; j++)
+                            foreach (IsotopePair isotopePair in pair.IsotopePairs)
                             {
-                                if (pair.peakCount[0, j] >= peaksNeeded && pair.peakCount[0, j] < numChannels && pair.peakPattern[0, j] >= 0)
+                                if (isotopePair.PeakCountByCluster[0] >= peaksNeeded && isotopePair.PeakCountByCluster[0] < numIsotopologues && isotopePair.PeakPattern[0] >= 0)
                                 {
-                                    Pair cleanedPair = new Pair(pair.parent, pair.rawFile, pair.scanNumber, pair.injectionTime, pair.retentionTime);
+                                    IsotopePair cleanedPair = new IsotopePair(isotopePair.Parent, isotopePair.Isotope);
                                     for (int i = 0; i < numChannels; i++)
                                     {
-                                        for (int k = 0; k < numIsotopes; k++)
-                                        {
-                                            if (k == j && i >= 0 && i < numChannels)
-                                            {
-                                                cleanedPair.peaks[i, k] = pair.peaks[i, k];
-                                            }
-                                        }
+                                        cleanedPair.ChannelPeaks[i] = isotopePair.ChannelPeaks[i];
                                     }
-                                    pairPatterns[pair.peakCount[0, j], pair.peakPattern[0, j]].PatternPairs.Add(cleanedPair);
+                                    pairPatterns[isotopePair.PeakCountByCluster[0], isotopePair.PeakPattern[0]].PatternPairs.Add(cleanedPair);
                                 }
                             }
                         }
@@ -7282,6 +8145,7 @@ namespace Coon.NeuQuant
                         // Find best pattern(s)
 
                         double bestScore = 0;
+                        double secondBestScore = 0;
                         int bestNumPeaks = 0;
                         int bestPatternPossibilities = 0;
 
@@ -7293,21 +8157,35 @@ namespace Coon.NeuQuant
                                 {
                                     bestNumPeaks = i;
                                     bestPatternPossibilities = j;
+                                    secondBestScore = bestScore;
                                     bestScore = pairPatterns[i, j].NormalizedScore;
+                                }
+                                else if (pairPatterns[i, j].NormalizedScore > secondBestScore)
+                                {
+                                    secondBestScore = pairPatterns[i, j].NormalizedScore;
                                 }
                             }
                         }
 
                         // If one pattern has 3 or more measurements
 
-                        if (bestNumPeaks > 0 && bestScore >= 3)
+                        if (bestNumPeaks > 0 && bestScore >= 3 && (bestScore / secondBestScore) > 3.0)
                         {
                             missingChannelPattern[0, 0] = bestNumPeaks;
                             missingChannelPattern[0, 1] = bestPatternPossibilities;
 
-                            foreach (Pair pair in pairPatterns[bestNumPeaks, bestPatternPossibilities].PatternPairs)
+                            foreach (IsotopePair isotopePair in pairPatterns[bestNumPeaks, bestPatternPossibilities].PatternPairs)
                             {
-                                newAllPairs.Add(pair);
+                                if (!newAllPairs.Contains(isotopePair.Parent))
+                                {
+                                    Pair pairToAdd = new Pair(this, rawFile, isotopePair.Parent.ScanNumber, isotopePair.Parent.Charge, isotopePair.Parent.InjectionTime, isotopePair.Parent.RetentionTime);
+                                    pairToAdd.IsotopePairs.Add(isotopePair);
+                                    newAllPairs.Add(pairToAdd);
+                                }
+                                else
+                                {
+                                    newAllPairs.Find(pair => pair.ScanNumber == isotopePair.Parent.ScanNumber).IsotopePairs.Add(isotopePair);
+                                }
                             }
                         }
 
@@ -7320,25 +8198,42 @@ namespace Coon.NeuQuant
             }
         }
 
-        public List<Pair> addPairToList(List<Pair> initialList, Pair pair, int cluster, int isotope, MSDataFile rawFile)
+        public void setTheoreticalIsotopicDistribution()
+        {
+            theoreticalIsotopicDistribution = new double[numIsotopes];
+
+            int countC12 = Pair.countElement("C", sequenceNoMods);
+            int countH1 = Pair.countElement("H", sequenceNoMods);
+            int countN14 = Pair.countElement("N", sequenceNoMods);
+            int countO16 = Pair.countElement("O", sequenceNoMods);
+            int countS32 = Pair.countElement("S", sequenceNoMods);
+            double[] relativeAbundances = new double[numIsotopes];
+    
+            if (numIsotopes == 3)
+            {  
+                relativeAbundances[0] = 100.0;
+                relativeAbundances[1] = (countC12 * 1.1) + (countH1 * 0.015) + (countN14 * 0.37);
+                relativeAbundances[2] = (Math.Pow(countC12 * 1.1, 2)) / 200.0 + (countO16 * 0.2) + (countS32 * 4.21);
+            }
+
+            for (int i = 0; i < numIsotopes; i++)
+            {
+                theoreticalIsotopicDistribution[i] = relativeAbundances[i];
+            }
+        }
+
+        public List<Pair> addPairToList(List<Pair> initialList, IsotopePair isotopePair, int cluster, MSDataFile rawFile)
         {
             List<Pair> updatedList = new List<Pair>();
             if (initialList == null) initialList = new List<Pair>();
             updatedList = initialList;
-            Pair pairToAdd = new Pair(this, rawFile, pair.scanNumber, pair.injectionTime, pair.retentionTime);
-            ILabeledPeak[,] peaksToAdd = new ILabeledPeak[numChannels, numIsotopes];
+            Pair pairToAdd = new Pair(this, rawFile, isotopePair.Parent.ScanNumber, isotopePair.Parent.Charge, isotopePair.Parent.InjectionTime, isotopePair.Parent.RetentionTime);
 
-            if (numIsotopologues > 1)
+            if (numIsotopologues > 1 && numClusters > 1)
             {
-                int channelIndex = cluster * numIsotopologues;
-                for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
-                {
-                    peaksToAdd[i, isotope] = pair.peaks[i, isotope];
-                }
-
                 if (updatedList.Count == 0)
                 {
-                    pairToAdd.peaks = peaksToAdd;
+                    pairToAdd.IsotopePairs.Add(isotopePair);
                     updatedList.Add(pairToAdd);
                 }
                 else
@@ -7346,32 +8241,37 @@ namespace Coon.NeuQuant
                     bool found = false;
                     foreach (Pair oldPair in updatedList)
                     {
-                        if (oldPair.scanNumber == pairToAdd.scanNumber)
+                        if (oldPair.ScanNumber == pairToAdd.ScanNumber)
                         {
-                            for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+                            bool isotopeFound = false;
+                            foreach (IsotopePair oldIsotopePair in oldPair.IsotopePairs)
                             {
-                                oldPair.peaks[i, isotope] = peaksToAdd[i, isotope];
+                                if (oldIsotopePair.Isotope == isotopePair.Isotope)
+                                {
+                                    isotopeFound = true;
+                                    int channelIndex = cluster * numIsotopologues;
+                                    for (int ch = channelIndex; ch < channelIndex + numIsotopologues; ch++)
+                                    {
+                                        oldIsotopePair.ChannelPeaks[ch] = isotopePair.ChannelPeaks[ch];
+                                    }
+                                }
                             }
+                            if (!isotopeFound) oldPair.IsotopePairs.Add(isotopePair);
                             found = true;
                         }
                     }
                     if (!found)
                     {
-                        pairToAdd.peaks = peaksToAdd;
+                        pairToAdd.IsotopePairs.Add(isotopePair);
                         updatedList.Add(pairToAdd);
                     }
                 }
             }
             else
             {
-                for (int i = 0; i < numChannels; i++)
-                {
-                    peaksToAdd[i, isotope] = pair.peaks[i, isotope];
-                }
-
                 if (updatedList.Count == 0)
                 {
-                    pairToAdd.peaks = peaksToAdd;
+                    pairToAdd.IsotopePairs.Add(isotopePair);
                     updatedList.Add(pairToAdd);
                 }
                 else
@@ -7379,18 +8279,15 @@ namespace Coon.NeuQuant
                     bool found = false;
                     foreach (Pair oldPair in updatedList)
                     {
-                        if (oldPair.scanNumber == pairToAdd.scanNumber)
+                        if (oldPair.ScanNumber == pairToAdd.ScanNumber)
                         {
-                            for (int i = 0; i < numChannels; i++)
-                            {
-                                oldPair.peaks[i, isotope] = peaksToAdd[i, isotope];
-                            }
+                            oldPair.IsotopePairs.Add(isotopePair);
                             found = true;
                         }
                     }
                     if (!found)
                     {
-                        pairToAdd.peaks = peaksToAdd;
+                        pairToAdd.IsotopePairs.Add(isotopePair);
                         updatedList.Add(pairToAdd);
                     }
                 }
@@ -7402,15 +8299,10 @@ namespace Coon.NeuQuant
          */
         public void applyNoise(MSDataFile rawFile)
         {
-            //if (sequence.Equals("TVFGLSDSMSK"))
-            //{
-            //    int found = 0;
-            //}
             
             //Apply noise to missing channels
             List<Pair> all;
             List<Pair> completeOnly;
-            ILabeledPeak peak;
             double coalescenceIntensity = 100000000.0;
             int channelIndex;
 
@@ -7425,10 +8317,10 @@ namespace Coon.NeuQuant
             completePairs.TryGetValue(rawFile, out completeOnly);
 
             if (numIsotopologues > 1)
-            {
+            {               
                 foreach (Pair pair in all)
                 {
-                    for (int j = 0; j < numIsotopes; j++)
+                    foreach (IsotopePair isotopePair in pair.IsotopePairs)
                     {
                         for (int c = 0; c < numClusters; c++)
                         {
@@ -7477,17 +8369,14 @@ namespace Coon.NeuQuant
                             //    }
                             //}
                             // For incomplete pairs
-                            if (!pair.complete[c,j] && pair.peakCount[c, j] >= peaksNeeded)
+                            if (!isotopePair.CompleteByCluster[c] && isotopePair.PeakCountByCluster[c] >= peaksNeeded)
                             {
                                 // Check for coalescence
-                                if (coalescenceDetected && pair.maxClusterIntensity[c, j] > coalescenceIntensity)
+                                if (coalescenceDetected && isotopePair.MaxIntensityByCluster[c] > coalescenceIntensity)
                                 {
-                                    if (pair.maxClusterIntensity[c, j] > coalescenceIntensity)
+                                    for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
                                     {
-                                        for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
-                                        {
-                                            pair.peaks[m, j] = null;
-                                        }
+                                        isotopePair.ChannelPeaks[m] = null;
                                     }
                                 }
                                 // Apply noise to missing channels
@@ -7495,10 +8384,10 @@ namespace Coon.NeuQuant
                                 {
                                     for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
                                     {
-                                        if (pair.peaks[m, j] == null)
+                                        if (isotopePair.ChannelPeaks[m] == null)
                                         {
-                                            ThermoLabeledPeak noisePeak = new ThermoLabeledPeak(0.0, pair.averageNoise, pair.charge, pair.averageNoise);
-                                            pair.peaks[m, j] = noisePeak;
+                                            ThermoLabeledPeak noisePeak = new ThermoLabeledPeak(0.0, pair.AverageNoise, pair.Charge, pair.AverageNoise);
+                                            isotopePair.ChannelPeaks[m] = noisePeak;
                                         }
                                     }
                                 }
@@ -7511,53 +8400,66 @@ namespace Coon.NeuQuant
             {
                 foreach (Pair pair in all)
                 {
-                    for (int j = 0; j < numIsotopes; j++)
+                    foreach (IsotopePair isotopePair in pair.IsotopePairs)
                     {
-                        // For complete pairs
-                        if (pair.complete[0, j])
-                        {
-                            // First check to see if the peptide is already on the complete list
-                            bool found = false;
-                            int SN = pair.scanNumber;
-
-                            foreach (Pair noNBC in completeOnly)
-                            {
-                                if (noNBC.scanNumber == SN)
-                                {
-                                    // If found, update peaks for that pair
-                                    for (int m = 0; m < numChannels; m++)
-                                    {
-                                        noNBC.peaks[m, j] = pair.peaks[m, j];
-                                    }
-                                    found = true;
-                                }
-                            }
-
-                            // If not found, add pair
-                            if (!found)
-                            {
-                                Pair noNBCPair = new Pair(this, rawFile, pair.scanNumber, pair.injectionTime, pair.retentionTime);
-                                for (int m = 0; m < numChannels; m++)
-                                {
-                                    noNBCPair.peaks[m, j] = pair.peaks[m, j];
-                                }
-                                completeOnly.Add(noNBCPair);
-                            }
-                        }
-
                         // For incomplete pairs
-                        else if (pair.peakCount[0, j] >= peaksNeeded)
+                        if (!isotopePair.Complete && isotopePair.TotalPeakCount >= peaksNeeded)
                         {
-                            // Apply noise to missing channels
                             for (int m = 0; m < numChannels; m++)
                             {
-                                if (pair.peaks[m, j] == null)
+                                if (isotopePair.ChannelPeaks[m] == null)
                                 {
-                                    ThermoLabeledPeak noisePeak = new ThermoLabeledPeak(0.0, pair.averageNoise, pair.charge, pair.averageNoise);
-                                    pair.peaks[m, j] = noisePeak;
+                                    ThermoLabeledPeak noisePeak = new ThermoLabeledPeak(0.0, pair.AverageNoise, pair.Charge, pair.AverageNoise);
+                                    isotopePair.ChannelPeaks[m] = noisePeak;
                                 }
                             }
                         }
+                        
+                        //// For complete pairs
+                        //if (pair.complete[0, j])
+                        //{
+                        //    // First check to see if the peptide is already on the complete list
+                        //    bool found = false;
+                        //    int SN = pair.scanNumber;
+
+                        //    foreach (Pair noNBC in completeOnly)
+                        //    {
+                        //        if (noNBC.scanNumber == SN)
+                        //        {
+                        //            // If found, update peaks for that pair
+                        //            for (int m = 0; m < numChannels; m++)
+                        //            {
+                        //                noNBC.peaks[m, j] = pair.peaks[m, j];
+                        //            }
+                        //            found = true;
+                        //        }
+                        //    }
+
+                        //    // If not found, add pair
+                        //    if (!found)
+                        //    {
+                        //        Pair noNBCPair = new Pair(this, rawFile, pair.scanNumber, pair.injectionTime, pair.retentionTime);
+                        //        for (int m = 0; m < numChannels; m++)
+                        //        {
+                        //            noNBCPair.peaks[m, j] = pair.peaks[m, j];
+                        //        }
+                        //        completeOnly.Add(noNBCPair);
+                        //    }
+                        //}
+
+                        //// For incomplete pairs
+                        //else if (pair.peakCount[0, j] >= peaksNeeded)
+                        //{
+                        //    // Apply noise to missing channels
+                        //    for (int m = 0; m < numChannels; m++)
+                        //    {
+                        //        if (pair.peaks[m, j] == null)
+                        //        {
+                        //            ThermoLabeledPeak noisePeak = new ThermoLabeledPeak(0.0, pair.averageNoise, pair.charge, pair.averageNoise);
+                        //            pair.peaks[m, j] = noisePeak;
+                        //        }
+                        //    }
+                        //}
                     }
                 }
             }
@@ -7573,7 +8475,6 @@ namespace Coon.NeuQuant
             int charge = best.Charge;
             int scanNumber = best.ScanNumber;
             MSDataScan precursorScan;
-            ILabeledPeak peak;
             double precursorPPM;
             PrecursorPPM ppm;
             int correctScan = -1;
@@ -7611,7 +8512,7 @@ namespace Coon.NeuQuant
             }
                 
             // Then find all possible precursor monoisotope peaks 
-            if (numIsotopologues > 1)
+            if (numIsotopologues > 1 && isotopologueLabel)
             {
                 double[] theo;
                 int channelIndex;
@@ -7649,7 +8550,9 @@ namespace Coon.NeuQuant
             }
             else
             {
-                ILabeledPeak[] peaks = new ILabeledPeak[numChannels];
+                int numPeptideVersions = numChannels;
+                if (!clusterLabel) numPeptideVersions = 1;
+                ILabeledPeak[] peaks = new ILabeledPeak[numPeptideVersions];
                 int peaksCount = 0;
                 
                 //if (Form1.SILAC_DUPLEX_LEUCN && Form1.CORRECTLEUNLOSS)
@@ -7657,14 +8560,14 @@ namespace Coon.NeuQuant
                 //    int correction = correctIsotopeDistributions(precursorScan, rawFile);
                 //    theoMasses[1, 0] -= correction * (Constants.NITROGEN15 - Constants.NITROGEN);
                 //}
-                for (int i = 0; i < numChannels; i++)
+                for (int i = 0; i < numPeptideVersions; i++)
                 {
                     peaks[i] = largestPeak(theoMasses[i, 0], precursorScan, firstSearchMassRange, rawFile);
                     if (peaks[i] != null) peaksCount++;
                 }
-                if (peaksCount == numChannels)
+                if (peaksCount == numPeptideVersions)
                 {
-                    for (int i = 0; i < numChannels; i++)
+                    for (int i = 0; i < numPeptideVersions; i++)
                     {
                         precursorPPM = MassTolerance.GetTolerance(Mass.MassFromMz(peaks[i].X, charge), theoMasses[i, 0], MassToleranceType.PPM);
                         ppm = new PrecursorPPM(charge, this.sequence, best.EValue, precursorPPM);
@@ -7795,17 +8698,16 @@ namespace Coon.NeuQuant
 
         public bool GetTheoreticalResolvability(int cluster)
         {
-            if (numLabels == 0) return false;
-
-            else if (numIsotopologues < 2) return true;
-
+            if (!labeled) return false;
+            else if (numIsotopologues < 2 && clusterLabel) return true;
+            else if (numIsotopologues > 1 && !isotopologueLabel) return false;
             else
             {
                 int charge = bestPSM.Charge;
                 double experimentalSeparation = (spacingMassRange[1, 0].Mean) / (double)charge;
                 int clusterIndex = cluster * numIsotopologues;
-                double coefficient = (Math.Sqrt(2 * Math.Log(100.0 / QUANTSEPARATION))) / (Math.Sqrt(2 * Math.Log(2)));
-                double theoreticalSeparation = coefficient * ((Mass.MzFromMass(theoMasses[clusterIndex, 0], charge) / (QUANTRESOLUTION * Math.Sqrt(400 / Mass.MzFromMass(theoMasses[clusterIndex, 0], charge)))));
+                double coefficient = (Math.Sqrt(2 * Math.Log(100.0 / quantSeparation))) / (Math.Sqrt(2 * Math.Log(2)));
+                double theoreticalSeparation = coefficient * ((Mass.MzFromMass(theoMasses[clusterIndex, 0], charge) / (quantResolution * Math.Sqrt(400 / Mass.MzFromMass(theoMasses[clusterIndex, 0], charge)))));
 
                 if (experimentalSeparation > theoreticalSeparation)
                 {
@@ -7830,17 +8732,17 @@ namespace Coon.NeuQuant
             {
                 foreach (Pair pair in pairs)
                 {
-                    for (int c = 0; c < numClusters; c++)
+                    foreach (IsotopePair isotopePair in pair.IsotopePairs)
                     {
-                        for (int j = 0; j < numIsotopes; j++)
+                        for (int c = 0; c < numClusters; c++)
                         {
                             // Complete pairs
-                            if (pair.complete[c, j])
+                            if (isotopePair.CompleteByCluster[c])
                             {
                                 pairTotalCount++;
                             }
                             // Pairs with fewer than half the total number of isotopologues
-                            else if (Form1.NOISEBANDCAP && pair.peakCount[c, j] < peaksNeeded)
+                            else if (Form1.NOISEBANDCAP && isotopePair.PeakCountByCluster[c] < peaksNeeded)
                             {
                                 // Do nothing
                             }
@@ -7942,48 +8844,69 @@ namespace Coon.NeuQuant
         /* Calculates whether the given pair exceeds the intensity threshold for quantitative filtering
          * Returns true if pair should be included for quantification, false if it should be excluded
          */
-        public bool quantFilter(Pair pair, int isotope, int cluster, bool complete)
-        {            
-            bool addIntensities = true;
-            double[,] max;
+        public bool quantFilter(IsotopePair isotopePair, int cluster, bool complete)
+        {
+            // Find the maximum intensity for each channel, considering incomplete sets only in the absence of complete pairs
+            double[,] max = absoluteMaxIntensity;
+            
+            // Set maximum as 0 for isotope quant
+            if (Form1.ISOTOPEQUANT)
+            {
+                max = new double[numChannels, 2];
+            }
+            
             int channelIndex;
 
             // Should not have any null peaks in the pair at this point
-            if (numIsotopologues > 1 && pair.peakCount[cluster, isotope] != numIsotopologues)
+            if (numIsotopologues > 1 && isotopePair.PeakCountByCluster[cluster] != numIsotopologues)
             {
                 return false;
             }
-            else if (numIsotopologues < 2 && pair.peakCount[cluster, isotope] != numChannels)
+            else if (numIsotopologues < 2 && isotopePair.TotalPeakCount != numChannels)
             {
                 return false;
             }
 
             // If there are more than 2 complete pairs, use their max intensity
-            if (countCompleteIsotopes[cluster] > peaksNeeded)
-            {
-                max = maxCompleteIntensity;
-            }
-            else
-            {
-                max = maxIntensity;
-            }
+            //if (countCompleteIsotopes[cluster] > peaksNeeded)
+            //{
+            //    max = maxCompleteIntensity;
+            //}
+            //else
+            //{
+            //    max = maxIntensity;
+            //}
 
-            if (numIsotopologues > 1)
+            //if (maxCompleteIntensity[0, 0] > 0.0 || maxCompleteIntensity[1,0] > 0.0) max = maxCompleteIntensity;
+            //else max = maxIntensity;
+
+            bool includePair = false;
+
+            // NeuCode + multiple clusters
+            if (numIsotopologues > 1 && numClusters > 1)
             {
                 channelIndex = cluster * numIsotopologues;
-                int count;
 
                 // For complete pairs
-                if (pair.complete[cluster, isotope])
+                if (isotopePair.CompleteByCluster[cluster])
                 {
-                    count = 0;
                     for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
                     {
                         double intensityThreshold = INTENSITYCUTOFF * max[i, 0];
-                        double peakIntensity = pair.peaks[i, isotope].GetDenormalizedIntensity(pair.injectionTime);
-                        if (peakIntensity < intensityThreshold)
+                        double peakIntensity = isotopePair.ChannelPeaks[i].GetDenormalizedIntensity(isotopePair.Parent.InjectionTime);
+                        if (peakIntensity >= intensityThreshold)
                         {
-                            count++;
+                            includePair = true;
+                            if (complete)
+                            {
+                                completeTotalIntensity[i, isotopePair.Isotope] += peakIntensity;
+                                completeTotalIntensity[i, numIsotopes] += peakIntensity;
+                            }
+                            else
+                            {
+                                totalIntensity[i, isotopePair.Isotope] += peakIntensity;
+                                totalIntensity[i, numIsotopes] += peakIntensity;
+                            }
                         }
                     }
                 }
@@ -7991,61 +8914,72 @@ namespace Coon.NeuQuant
                 // For incomplete pairs, only consider non noise-band capped channels for quantitative filtering
                 else
                 {
-                    count = 0;
                     for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
                     {
                         double intensityThreshold = INTENSITYCUTOFF * max[i, 0];
-                        double peakIntensity = pair.peaks[i, isotope].GetDenormalizedIntensity(pair.injectionTime);
-                        //if (pair.peakCount[cluster, isotope] > peaksNeeded && peakIntensity < intensityThreshold)
-                        //{
-                        //    count++;
-                        //}
-                        
-                        if (pair.peaks[i, isotope].X > 0 && peakIntensity < intensityThreshold)
+                        double peakIntensity = isotopePair.ChannelPeaks[i].GetDenormalizedIntensity(isotopePair.Parent.InjectionTime);                        
+                        if (peakIntensity >= intensityThreshold)
                         {
-                            count++;
+                            includePair = true;
+                            if (complete)
+                            {
+                                completeTotalIntensity[i, isotopePair.Isotope] += peakIntensity;
+                                completeTotalIntensity[i, numIsotopes] += peakIntensity;
+                            }
+                            else
+                            {
+                                totalIntensity[i, isotopePair.Isotope] += peakIntensity;
+                                totalIntensity[i, numIsotopes] += peakIntensity;
+                            }
                         }
                     }
                 }
-
-                if (count > 0) return false;
-                else return true;
             }
+            // Single-cluster NeuCode and traditional SILAC
             else
             {
-                int count;
-
                 for (int i = 0; i < numChannels; i++)
                 {
-                    count = 0;
                     // For complete pairs
-                    if (pair.complete[cluster, isotope])
+                    if (isotopePair.Complete)
                     {
                         double intensityThreshold = INTENSITYCUTOFF * max[i, 0];
-                        double peakIntensity = pair.peaks[i, isotope].GetDenormalizedIntensity(pair.injectionTime);
-                        if (peakIntensity < intensityThreshold)
+                        double peakIntensity = isotopePair.ChannelPeaks[i].GetDenormalizedIntensity(isotopePair.Parent.InjectionTime);
+                        if (peakIntensity >= intensityThreshold)
                         {
-                            count++;
+                            includePair = true;
+                            if (complete)
+                            {
+                                completeTotalIntensity[i, isotopePair.Isotope] += peakIntensity;
+                                completeTotalIntensity[i, numIsotopes] += peakIntensity;
+                            }
+                            else
+                            {
+                                totalIntensity[i, isotopePair.Isotope] += peakIntensity;
+                                totalIntensity[i, numIsotopes] += peakIntensity;
+                            }
                         }
                     }
                     // For incomplete pairs, only consider non noise-band capped channels for quantitative filtering
                     else
                     {
                         double intensityThreshold = INTENSITYCUTOFF * max[i, 0];
-                        double peakIntensity = pair.peaks[i, isotope].GetDenormalizedIntensity(pair.injectionTime);
-                        //if (pair.peakCount[cluster, isotope] > peaksNeeded && peakIntensity < intensityThreshold)
-                        //{
-                        //    count++;
-                        //}
-
-                        if (pair.peaks[i, isotope].X > 0 && peakIntensity < intensityThreshold)
+                        double peakIntensity = isotopePair.ChannelPeaks[i].GetDenormalizedIntensity(isotopePair.Parent.InjectionTime);
+                        if (peakIntensity >= intensityThreshold)
                         {
-                            count++;
+                            includePair = true;
+                            if (complete)
+                            {
+                                completeTotalIntensity[i, isotopePair.Isotope] += peakIntensity;
+                                completeTotalIntensity[i, numIsotopes] += peakIntensity;
+                            }
+                            else
+                            {
+                                totalIntensity[i, isotopePair.Isotope] += peakIntensity;
+                                totalIntensity[i, numIsotopes] += peakIntensity;
+                            }
                         }
-                    }
-
-                    if (count > 0) return false;
-                    else return true;
+                    }                    
                 }
                 
                 //for (int i = 0; i < numChannels; i++)
@@ -8152,18 +9086,464 @@ namespace Coon.NeuQuant
             //        }
             //    }
             //}
-            return addIntensities;
+            return includePair;
+        }
+
+        public void filterPairs(MSDataFile rawFile)
+        {
+            List<Pair> unfilteredPairs = allPairs[rawFile];
+            List<Pair> rTFilteredPairs = new List<Pair>();
+            List<Pair> monoisotopeFilteredPairs = new List<Pair>();
+            List<Pair> isotopicDistributionFilteredPairs = new List<Pair>();
+            List<MSDataScan> MS1Scans = fullScanList;
+            List<int> MS1ScanNumbers = new List<int>();
+            foreach (MSDataScan Scan in MS1Scans)
+            {
+                MS1ScanNumbers.Add(Scan.SpectrumNumber);
+            }
+            MS1ScanNumbers.Sort();
+            List<int> PSMScanNumbers = new List<int>();
+            foreach (PeptideSpectralMatch Psm in PSMs[rawFile])
+            {
+                PSMScanNumbers.Add(Psm.MS1ScanNumber);
+            }
+            PSMScanNumbers.Sort();
+            List<int> MS1ScanNumbersBeforePSM = new List<int>();
+            List<Pair> PairsBeforePSM = new List<Pair>();
+            List<int> MS1ScanNumbersAfterPSM = new List<int>();
+            List<Pair> PairsAfterPSM = new List<Pair>();
+            List<int> MS1ScanNumbersContainingPSM = new List<int>();
+            List<Pair> PairsContainingPSM = new List<Pair>();
+            int firstPSMScanNumber = PSMScanNumbers[0];
+            int lastPSMScanNumber = PSMScanNumbers[PSMScanNumbers.Count - 1];
+            if (lastPSMScanNumber - firstPSMScanNumber >= 1000)
+            {
+                PSMScanNumbers.Clear();
+                PSMScanNumbers.Add(bestPSMs[rawFile].MS1ScanNumber);
+                firstPSMScanNumber = bestPSMs[rawFile].MS1ScanNumber;
+                lastPSMScanNumber = firstPSMScanNumber;
+            }
+            foreach (int Scan in MS1ScanNumbers)
+            {
+                if (Scan < firstPSMScanNumber) MS1ScanNumbersBeforePSM.Add(Scan);
+                else if (Scan > lastPSMScanNumber) MS1ScanNumbersAfterPSM.Add(Scan);
+                else MS1ScanNumbersContainingPSM.Add(Scan);
+            }
+            foreach (Pair pair in unfilteredPairs)
+            {
+                if (pair.ScanNumber < firstPSMScanNumber) PairsBeforePSM.Add(pair);
+                else if (pair.ScanNumber > lastPSMScanNumber) PairsAfterPSM.Add(pair);
+                else PairsContainingPSM.Add(pair);
+            }
+
+            // Sort scan & pairs
+            List<int> SortedMS1ScanNumbersBeforePSM = new List<int>();
+            for (int i = MS1ScanNumbersBeforePSM.Count - 1; i >= 0; i--)
+            {
+                SortedMS1ScanNumbersBeforePSM.Add(MS1ScanNumbersBeforePSM[i]);
+            }
+            List<Pair> SortedPairsBeforePSM = PairsBeforePSM.OrderByDescending(pair => pair.ScanNumber).ToList();
+
+            foreach (Pair pair in PairsContainingPSM)
+            {
+                rTFilteredPairs.Add(pair);
+            }
+
+
+            int currentScanIndex;
+            int previousScanIndex;
+            Pair currentPair;
+
+            bool stopIncludingPairs = false;
+            int currentIndex = 0;
+            int numSkippedScans = 0;
+            while (!stopIncludingPairs && currentIndex < SortedPairsBeforePSM.Count)
+            {
+                currentPair = SortedPairsBeforePSM[currentIndex];
+                currentScanIndex = SortedMS1ScanNumbersBeforePSM.IndexOf(currentPair.ScanNumber);
+                
+                if (currentIndex == 0)
+                {
+                    numSkippedScans = currentScanIndex;
+                }
+                else
+                {
+                    previousScanIndex = SortedMS1ScanNumbersBeforePSM.IndexOf(SortedPairsBeforePSM[currentIndex - 1].ScanNumber);
+                    numSkippedScans = currentScanIndex - previousScanIndex;
+                }
+
+                if (numSkippedScans > 1) stopIncludingPairs = true;
+                else
+                {
+                    rTFilteredPairs.Add(currentPair);
+                }
+                currentIndex++;
+            }
+
+            stopIncludingPairs = false;
+            currentIndex = 0;
+            numSkippedScans = 0;
+            while (!stopIncludingPairs && currentIndex < PairsAfterPSM.Count)
+            {
+                currentPair = PairsAfterPSM[currentIndex];
+                currentScanIndex = MS1ScanNumbersAfterPSM.IndexOf(currentPair.ScanNumber);
+
+                if (currentIndex == 0)
+                {
+                    numSkippedScans = currentScanIndex;
+                }
+                else
+                {
+                    previousScanIndex = MS1ScanNumbersAfterPSM.IndexOf(PairsAfterPSM[currentIndex - 1].ScanNumber);
+                    numSkippedScans = currentScanIndex - previousScanIndex;
+                }
+                if (numSkippedScans > 1) stopIncludingPairs = true;
+                else
+                {
+                    rTFilteredPairs.Add(currentPair);
+                }
+                currentIndex++;
+            }
+
+            //for (int i = 0; i < unfilteredPairs.Count; i++)
+            //{
+            //    Pair currentPair = unfilteredPairs[i];
+            //    Pair previousPair;
+            //    Pair nextPair;
+            //    int currentPairIndex = MS1ScanNumbers.IndexOf(currentPair.ScanNumber);
+            //    int nextPairIndex;
+            //    int previousPairIndex;
+
+
+            //    if (unfilteredPairs.Count == 1) rTFilteredPairs.Add(currentPair);
+            //    else if (i == 0)
+            //    {
+            //        nextPair = unfilteredPairs[i + 1];
+            //        nextPairIndex = MS1ScanNumbers.IndexOf(nextPair.ScanNumber);
+
+            //        if (nextPairIndex - currentPairIndex <= 2 || currentPair.PeaksPerIsotope[0] > 0) rTFilteredPairs.Add(currentPair);
+
+            //    }
+            //    else if (i == unfilteredPairs.Count - 1)
+            //    {
+            //        previousPair = unfilteredPairs[i - 1];
+            //        previousPairIndex = MS1ScanNumbers.IndexOf(previousPair.ScanNumber);
+
+            //        if (currentPairIndex - previousPairIndex <= 2 || currentPair.PeaksPerIsotope[0] > 0) rTFilteredPairs.Add(currentPair);
+            //    }
+            //    else
+            //    {
+            //        nextPair = unfilteredPairs[i + 1];
+            //        nextPairIndex = MS1ScanNumbers.IndexOf(nextPair.ScanNumber);
+            //        previousPair = unfilteredPairs[i - 1];
+            //        previousPairIndex = MS1ScanNumbers.IndexOf(previousPair.ScanNumber);
+
+            //        if (nextPairIndex - currentPairIndex <= 2 || currentPairIndex - previousPairIndex <= 2 || currentPair.PeaksPerIsotope[0] > 0) rTFilteredPairs.Add(currentPair);
+            //    }
+            //}
+
+            // Sort retention time filtered pairs
+            List<Pair> sortedRTFilteredPairs = rTFilteredPairs.OrderBy(pair => pair.ScanNumber).ToList();
+            
+            if (sortedRTFilteredPairs.Count <= 1)
+            {
+                monoisotopeFilteredPairs = sortedRTFilteredPairs;
+            }
+            else
+            {
+                int firstMonoScanNumber = sortedRTFilteredPairs[sortedRTFilteredPairs.Count - 1].ScanNumber;
+                int lastMonoScanNumber = sortedRTFilteredPairs[0].ScanNumber;
+
+                for (int i = 0; i < sortedRTFilteredPairs.Count; i++)
+                {
+                    if (sortedRTFilteredPairs[i].PeaksPerIsotope[0] > 0 && sortedRTFilteredPairs[i].ScanNumber < firstMonoScanNumber) firstMonoScanNumber = sortedRTFilteredPairs[i].ScanNumber;
+                    if (sortedRTFilteredPairs[i].PeaksPerIsotope[0] > 0 && sortedRTFilteredPairs[i].ScanNumber > lastMonoScanNumber) lastMonoScanNumber = sortedRTFilteredPairs[i].ScanNumber;
+                }
+
+                if (firstMonoScanNumber <= lastMonoScanNumber)
+                {
+                    Range<int> scanNumberRange = new Range<int>(firstMonoScanNumber, lastMonoScanNumber);
+                    for (int i = 0; i < sortedRTFilteredPairs.Count; i++)
+                    {
+                        if (scanNumberRange.Contains(sortedRTFilteredPairs[i].ScanNumber)) monoisotopeFilteredPairs.Add(sortedRTFilteredPairs[i]);
+                    }
+                }
+                else
+                {
+                    monoisotopeFilteredPairs = sortedRTFilteredPairs;
+                }
+            }
+
+            if (monoisotopeFilteredPairs.Count <= 1 || numIsotopes < 2)
+            {
+                isotopicDistributionFilteredPairs = monoisotopeFilteredPairs;
+            }
+            else
+            {
+                foreach (Pair pair in monoisotopeFilteredPairs)
+                {
+                    if (pair.PeaksPerIsotope[0] > 0 && pair.IsotopePairs.Count > 1)
+                    {
+                        List<IsotopePair> cleanedIsotopePairs = new List<IsotopePair>();
+                        double monoMaxIntensity = pair.IsotopePairs[0].MaxIntensity;
+                        if (pair.IsotopePairs[0].Complete)
+                        {           
+                            cleanedIsotopePairs.Add(pair.IsotopePairs[0]);
+                            for (int i = 1; i < pair.IsotopePairs.Count; i++)
+                            {
+                                if (pair.IsotopePairs[i].Complete)
+                                {
+                                    double distributionRatio = theoreticalIsotopicDistribution[i] / theoreticalIsotopicDistribution[0];
+                                    if (distributionRatio < 1)
+                                    {
+                                        if ((pair.IsotopePairs[i].MaxIntensity / monoMaxIntensity) <= distributionRatio * 2.0)
+                                        {
+                                            cleanedIsotopePairs.Add(pair.IsotopePairs[i]);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        if ((pair.IsotopePairs[i].MaxIntensity / monoMaxIntensity) >= distributionRatio * 0.5)
+                                        {
+                                            cleanedIsotopePairs.Add(pair.IsotopePairs[i]);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            bool completeIsotopeFound = false;
+                            for (int i = 1; i < pair.IsotopePairs.Count; i++)
+                            {
+                                double distributionRatio = theoreticalIsotopicDistribution[i] / theoreticalIsotopicDistribution[0];
+                                if (distributionRatio < 1)
+                                {
+                                    if ((pair.IsotopePairs[i].MaxIntensity / monoMaxIntensity) <= distributionRatio * 2.0)
+                                    {
+                                        if (pair.IsotopePairs[i].Complete) completeIsotopeFound = true;
+                                        cleanedIsotopePairs.Add(pair.IsotopePairs[i]);
+                                    }
+                                }
+                                else
+                                {
+                                    if ((pair.IsotopePairs[i].MaxIntensity / monoMaxIntensity) >= distributionRatio * 0.5)
+                                    {
+                                        if (pair.IsotopePairs[i].Complete) completeIsotopeFound = true;
+                                        cleanedIsotopePairs.Add(pair.IsotopePairs[i]);
+                                    }
+                                }
+                            }
+
+                            if (!completeIsotopeFound)
+                            {
+                                cleanedIsotopePairs.Add(pair.IsotopePairs[0]);
+                            }
+                        }
+                        List<IsotopePair> sortedCleanedIsotopePairs = cleanedIsotopePairs.OrderBy(isotope => isotope.Isotope).ToList();
+                        pair.IsotopePairs = sortedCleanedIsotopePairs;
+                        isotopicDistributionFilteredPairs.Add(pair);
+                    }
+                    else
+                    {
+                        isotopicDistributionFilteredPairs.Add(pair);
+                    }
+                }
+            }
+            allPairs[rawFile] = isotopicDistributionFilteredPairs;
+        }
+
+        public List<IsotopePair> findMedianPairs(List<IsotopePair> originalPairs)
+        {
+            List<IsotopePair> medianPairs = new List<IsotopePair>();
+            List<IsotopePair>[] sortedPairsByChannel = new List<IsotopePair>[numChannels];
+
+            foreach (IsotopePair currentPair in originalPairs)
+            {
+                if (currentPair.TotalPeakCount > 0)
+                {
+                    for (int c = 0; c < numChannels; c++)
+                    {
+                        if (currentPair.MeanNormalizedIntensities[c] > 0)
+                        {
+                            sortedPairsByChannel[c] = originalPairs.OrderBy(pair => pair.MeanNormalizedIntensities[c]).ToList();
+                        }
+                    }
+                }
+            }
+
+            for (int c = 0; c < numChannels; c++)
+            {
+                int isotopePairCount = sortedPairsByChannel[c].Count;
+                IsotopePair medianIsotopePair = sortedPairsByChannel[c].ElementAt(isotopePairCount / 2);
+                if (!medianPairs.Contains(medianIsotopePair)) medianPairs.Add(medianIsotopePair);
+                if (isotopePairCount % 2 == 0)
+                {
+                    medianIsotopePair = sortedPairsByChannel[c].ElementAt((isotopePairCount / 2) - 1);
+                    if (!medianPairs.Contains(medianIsotopePair)) medianPairs.Add(medianIsotopePair);
+                }
+            }
+            return medianPairs;
         }
 
         /* Assembles all the peptide's quantitative information
          */
         public void quantify()
-        {            
+        {
+            noQuantReason = NonQuantifiableType.WrongElutionProfiles;
+            List<IsotopePair> isotopePairsToQuantify = new List<IsotopePair>();
+            List<IsotopePair>[] isotopesToQuantify = new List<IsotopePair>[numIsotopes];
+
+            if (Form1.ISOTOPEQUANT)
+            {
+                for (int i = 0; i < numIsotopes; i++)
+                {
+                    isotopesToQuantify[i] = new List<IsotopePair>();
+                }
+            }
+
+            // NeuCode
             if (numIsotopologues > 1)
             {
                 int[,] final = new int[numClusters, 2];
+                if (completePairs != null && completePairs.Count > 0)
+                {
+                    foreach (List<Pair> pairs in completePairs.Values)
+                    {
+                        foreach (Pair pair in pairs)
+                        {
+                            foreach (IsotopePair isotopePair in pair.IsotopePairs)
+                            {
+                                for (int c = 0; c < numClusters; c++)
+                                {
+                                    if (Form1.QUANTFILTER)
+                                    {
+                                        // Eliminate low-level pairs by quantitative filtering
+                                        if (quantFilter(isotopePair, c, true))
+                                        {
+                                            //int channelIndex = c * numIsotopologues;
+                                            //for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+                                            //{
+                                            //    double denormalizedIntensity = isotopePair.ChannelPeaks[i].GetDenormalizedIntensity(pair.InjectionTime);
+                                            //    completeTotalIntensity[i, isotopePair.Isotope] += denormalizedIntensity;
+                                            //    completeTotalIntensity[i, numIsotopes] += denormalizedIntensity;
+                                            //}
+                                            isotopePairsToQuantify.Add(isotopePair);
+                                            final[c, 1]++;
+                                        }
+                                    }
+                                    else if (Form1.ISOTOPEQUANT)
+                                    {
+                                        quantFilter(isotopePair, c, true);
+                                        isotopesToQuantify[isotopePair.Isotope].Add(isotopePair);
+                                        isotopePairsToQuantify.Add(isotopePair);
+                                        final[c, 1]++;
+                                    }
+                                    //else
+                                    //{
+                                    //    int channelIndex = c * numIsotopologues;
+                                    //    bool noNullPeaks = true;
+                                    //    for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+                                    //    {
+                                    //        if (isotopePair.ChannelPeaks[i] == null)
+                                    //        {
+                                    //            noNullPeaks = false;
+                                    //        }
+                                    //    }
+
+                                    //    if (noNullPeaks)
+                                    //    {
+                                    //        for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+                                    //        {
+                                    //            double denormalizedIntensity = isotopePair.ChannelPeaks[i].GetDenormalizedIntensity(isotopePair.Parent.InjectionTime);
+                                    //            completeTotalIntensity[i, isotopePair.Isotope] += denormalizedIntensity;
+                                    //            completeTotalIntensity[i, numIsotopes] += denormalizedIntensity;
+                                    //        }
+                                    //        isotopePairsToQuantify.Add(isotopePair);
+                                    //        final[c, 1]++;
+                                    //    }
+                                    //}
+                                } // End cluster loop
+                            } // End isotope loop
+                        } // End pair loop
+                    } // End pair list loop
+                }
+                if (allPairs != null && allPairs.Count > 0)
+                {
+                    foreach (List<Pair> pairs in allPairs.Values)
+                    {
+                        foreach (Pair pair in pairs)
+                        {
+                            foreach (IsotopePair isotopePair in pair.IsotopePairs)
+                            {
+                                for (int c = 0; c < numClusters; c++)
+                                {
+                                    int channelIndex = c * numIsotopologues;
+                                    if (Form1.QUANTFILTER)
+                                    {
+                                        //Use a peak's intensity if it is not noise-band capped and its intensity is greater than 1/2e of the maximum intensity
+                                        if (quantFilter(isotopePair, c, false))
+                                        {
+                                            //for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+                                            //{
+                                            //    double denormalizedIntensity = isotopePair.ChannelPeaks[i].GetDenormalizedIntensity(isotopePair.Parent.InjectionTime);
+                                            //    totalIntensity[i, isotopePair.Isotope] += denormalizedIntensity;
+                                            //    totalIntensity[i, numIsotopes] += denormalizedIntensity;
+                                            //}
+                                            isotopePairsToQuantify.Add(isotopePair);
+                                            final[c, 0]++;
+                                        }
+                                    }
+                                    else if (Form1.ISOTOPEQUANT)
+                                    {
+                                        quantFilter(isotopePair, c, false);
+                                        isotopesToQuantify[isotopePair.Isotope].Add(isotopePair);
+                                        isotopePairsToQuantify.Add(isotopePair);
+                                        final[c, 0]++;
+                                    }
+                                    //else
+                                    //{
+                                    //    bool noNullPeaks = true;
+                                    //    int realPeaks = 0;
+                                    //    for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+                                    //    {
+                                    //        if (isotopePair.ChannelPeaks[i] == null)
+                                    //        {
+                                    //            noNullPeaks = false;
+                                    //        }
+                                    //        else
+                                    //        {
+                                    //            realPeaks++;
+                                    //        }
+                                    //    }
+
+                                    //    if (noNullPeaks)
+                                    //    {
+                                    //        for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+                                    //        {
+                                    //            if (isotopePair.ChannelPeaks[i] != null)
+                                    //            {
+                                    //                double denormalizedIntensity = isotopePair.ChannelPeaks[i].GetDenormalizedIntensity(isotopePair.Parent.InjectionTime);
+                                    //                totalIntensity[i, isotopePair.Isotope] += denormalizedIntensity;
+                                    //                totalIntensity[i, numIsotopes] += denormalizedIntensity;
+                                    //            }
+                                    //        }
+                                    //        isotopePairsToQuantify.Add(isotopePair);
+                                    //        final[c, 0]++;
+                                    //    }
+                                    //}
+                                }
+                            }
+                        }
+                    }
+                }
+
                 quantifiedNoiseIncluded = new bool[numClusters];
                 finalQuantified = new int[numClusters];
+                for (int c = 0; c < numClusters; c++)
+                {
+                    quantifiedNoiseIncluded[c] = true;
+                }
 
                 double lightInt;
                 double heavyInt;
@@ -8185,27 +9565,195 @@ namespace Coon.NeuQuant
                     minimumPostQFPairs = 3;
                 }
 
+                if (Form1.LYSINEPURITYCORRECTION)
+                {
+                    for (int i = 0; i < numChannels; i++)
+                    {
+                        for (int n = 0; n <= numIsotopes; n++)
+                        {
+                            completeTotalIntensity[i, n] = completeTotalIntensity[i, n] / Form1.CHANNELIMPURITIES[i];
+                            totalIntensity[i, n] = totalIntensity[i, n] / Form1.CHANNELIMPURITIES[i];
+                        }
+                    }
+                }
+
+                // Find the median ratio pairs and use for quantification
+                if (final[0, 1] >= minimumTotalPairs)
+                {
+                    //List<IsotopePair> assembledCompletePairs = new List<IsotopePair>();
+                    //foreach (List<Pair> complete in completePairs.Values)
+                    //{
+                    //    foreach (Pair completePair in complete)
+                    //    {
+                    //        foreach (IsotopePair completeIsotopePair in completePair.IsotopePairs)
+                    //        {
+                    //            assembledCompletePairs.Add(completeIsotopePair);
+                    //        }
+                    //    }
+                    //}
+                    List<IsotopePair> pairsToQuantify = findMedianPairs(isotopePairsToQuantify);
+                    medianCompleteTotalIntensity = new double[numChannels];
+
+                    foreach (IsotopePair quantifiedPair in pairsToQuantify)
+                    {
+                        for (int c = 0; c < numChannels; c++)
+                        {
+                            medianCompleteTotalIntensity[c] = quantifiedPair.ChannelPeaks[c].GetDenormalizedIntensity(quantifiedPair.Parent.InjectionTime) / Form1.CHANNELIMPURITIES[c];
+                        }
+                    }
+
+                    for (int c = 0; c < numClusters; c++)
+                    {
+                        int channelIndex = c * numIsotopologues;
+                        finalQuantified[c] = final[c, 1];
+                        quantifiedNoiseIncluded[c] = false;
+                        noQuantReason = NonQuantifiableType.Quantified;
+
+                        //mergeCompleteAllLists();
+                        foreach (MSDataFile rawFile in completePairs.Keys)
+                        {
+                            allPairs[rawFile] = completePairs[rawFile];
+                        }
+
+                        // Use only complete pairs for quantification
+                        for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+                        {
+                            for (int s = 0; s <= numIsotopes; s++)
+                            {
+                                totalIntensity[i, s] = completeTotalIntensity[i, s];
+                            }
+                        }
+
+                        int index1 = channelIndex;
+                        int index2 = index1 + 1;
+                        // Use only complete pairs for quantification
+                        for (int n = index2; n < channelIndex + numIsotopologues; n++)
+                        {
+                            lightInt = totalIntensity[index1, numIsotopes];
+                            heavyInt = totalIntensity[n, numIsotopes];
+
+                            if (lightInt > 0 && heavyInt > 0)
+                            {
+                                heavyToLightRatioSum[n - (c + 1)] = heavyInt / lightInt;
+                            }
+
+                            lightInt = medianCompleteTotalIntensity[index1];
+                            heavyInt = medianCompleteTotalIntensity[n];
+
+                            if (lightInt > 0 && heavyInt > 0)
+                            {
+                                heavyToLightRatioMedian[n - (c + 1), 0] = heavyInt / lightInt;
+                            }
+                            index2++;
+                        }
+                    }
+                }
+                else if (final[0, 1] + final[0, 0] >= minimumTotalPairs)
+                {
+                    //List<IsotopePair> assembledPairs = new List<IsotopePair>();
+                    //foreach (List<Pair> all in allPairs.Values)
+                    //{
+                    //    foreach (Pair pair in all)
+                    //    {
+                    //        foreach (IsotopePair isotopePair in pair.IsotopePairs)
+                    //        {
+                    //            assembledPairs.Add(isotopePair);
+                    //        }
+                    //    }
+                    //}
+                    //List<IsotopePair> pairsToQuantify = findMedianPairs(assembledPairs);
+
+                    List<IsotopePair> pairsToQuantify = findMedianPairs(isotopePairsToQuantify);
+                    medianTotalIntensity = new double[numChannels];
+
+                    foreach (IsotopePair quantifiedPair in pairsToQuantify)
+                    {
+                        for (int c = 0; c < numChannels; c++)
+                        {
+                            medianTotalIntensity[c] = quantifiedPair.ChannelPeaks[c].GetDenormalizedIntensity(quantifiedPair.Parent.InjectionTime) / Form1.CHANNELIMPURITIES[c];
+                        }
+                    }
+
+                    mergeCompleteAllLists();
+                    for (int c = 0; c < numClusters; c++)
+                    {
+                        int channelIndex = c * numIsotopologues;
+
+                        for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
+                        {
+                            for (int s = 0; s <= numIsotopes; s++)
+                            {
+                                totalIntensity[i, s] += completeTotalIntensity[i, s];
+                            }
+                        }
+
+                        finalQuantified[c] = final[c, 1] + final[c, 0];
+                        quantifiedNoiseIncluded[c] = true;
+                        noQuantReason = NonQuantifiableType.Quantified;
+
+                        int index1 = channelIndex;
+                        int index2 = index1 + 1;
+                        // Use only complete pairs for quantification
+                        for (int n = index2; n < channelIndex + numIsotopologues; n++)
+                        {
+                            lightInt = totalIntensity[index1, numIsotopes];
+                            heavyInt = totalIntensity[n, numIsotopes];
+
+                            if (lightInt > 0 && heavyInt > 0)
+                            {
+                                heavyToLightRatioSum[n - (c + 1)] = heavyInt / lightInt;
+                            }
+
+                            lightInt = medianTotalIntensity[index1];
+                            heavyInt = medianTotalIntensity[n];
+
+                            if (lightInt > 0 && heavyInt > 0)
+                            {
+                                heavyToLightRatioMedian[n - (c + 1), 0] = heavyInt / lightInt;
+                            }
+
+                            index2++;
+                        }
+                    }
+                }
+                else
+                {
+                    if (countAllIsotopes[0] + countCompleteIsotopes[0] < minimumTotalPairs)
+                    {
+                        noQuantReason = NonQuantifiableType.NotEnoughMeasurements;
+                    }
+                    // Not able to quantify
+                    for (int i = 0; i < numChannels; i++)
+                    {
+                        for (int s = 0; s <= numIsotopes; s++)
+                        {
+                            completeTotalIntensity[i, s] = 0;
+                            totalIntensity[i, s] = 0;
+                        }
+                    }
+                }
+
                 // First try to quantify based on complete sets of isotopologues
-                if (completePairs != null && completePairs.Count > 0)
+                /*if (completePairs != null && completePairs.Count > 0)
                 {
                     foreach (List<Pair> pairs in completePairs.Values)
                     {
                         foreach (Pair pair in pairs)
                         {
-                            for (int j = 0; j < numIsotopes; j++)
+                            foreach (IsotopePair isotopePair in pair.IsotopePairs)
                             {
                                 for (int c = 0; c < numClusters; c++)
                                 {
                                     if (Form1.QUANTFILTER)
                                     {
                                         // Eliminate low-level pairs by quantitative filtering
-                                        if (quantFilter(pair, j, c, true))
+                                        if (quantFilter(isotopePair, c, true))
                                         {
                                             int channelIndex = c * numIsotopologues;
                                             for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
                                             {
-                                                double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
-                                                completeTotalIntensity[i, j] += denormalizedIntensity;
+                                                double denormalizedIntensity = isotopePair.ChannelPeaks[i].GetDenormalizedIntensity(pair.InjectionTime);
+                                                completeTotalIntensity[i, isotopePair.Isotope] += denormalizedIntensity;
                                                 completeTotalIntensity[i, numIsotopes] += denormalizedIntensity;
                                             }
                                             final[c, 1]++;
@@ -8217,7 +9765,7 @@ namespace Coon.NeuQuant
                                         bool noNullPeaks = true;
                                         for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
                                         {
-                                            if (pair.peaks[i, j] == null)
+                                            if (isotopePair.ChannelPeaks[i] == null)
                                             {
                                                 noNullPeaks = false;
                                             }
@@ -8227,8 +9775,8 @@ namespace Coon.NeuQuant
                                         {
                                             for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
                                             {
-                                                double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
-                                                completeTotalIntensity[i, j] += denormalizedIntensity;
+                                                double denormalizedIntensity = isotopePair.ChannelPeaks[i].GetDenormalizedIntensity(isotopePair.Parent.InjectionTime);
+                                                completeTotalIntensity[i, isotopePair.Isotope] += denormalizedIntensity;
                                                 completeTotalIntensity[i, numIsotopes] += denormalizedIntensity;
                                             }
                                             final[c, 1]++;
@@ -8245,7 +9793,7 @@ namespace Coon.NeuQuant
                     {
                         foreach (Pair pair in pairs)
                         {
-                            for (int j = 0; j < numIsotopes; j++)
+                            foreach (IsotopePair isotopePair in pair.IsotopePairs)
                             {
                                 for (int c = 0; c < numClusters; c++)
                                 {
@@ -8254,12 +9802,12 @@ namespace Coon.NeuQuant
                                     {
                                         //Use a peak's intensity if it is not noise-band capped and its intensity is greater than 1/2e of the maximum intensity
 
-                                        if (quantFilter(pair, j, c, false))
+                                        if (quantFilter(isotopePair, c, false))
                                         {
                                             for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
                                             {
-                                                double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
-                                                totalIntensity[i, j] += denormalizedIntensity;
+                                                double denormalizedIntensity = isotopePair.ChannelPeaks[i].GetDenormalizedIntensity(isotopePair.Parent.InjectionTime);
+                                                totalIntensity[i, isotopePair.Isotope] += denormalizedIntensity;
                                                 totalIntensity[i, numIsotopes] += denormalizedIntensity;
 
                                             }
@@ -8272,7 +9820,7 @@ namespace Coon.NeuQuant
                                         int realPeaks = 0;
                                         for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
                                         {
-                                            if (pair.peaks[i, j] == null)
+                                            if (isotopePair.ChannelPeaks[i] == null)
                                             {
                                                 noNullPeaks = false;
                                             }
@@ -8286,10 +9834,10 @@ namespace Coon.NeuQuant
                                         {
                                             for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
                                             {
-                                                if (pair.peaks[i, j] != null)
+                                                if (isotopePair.ChannelPeaks[i] != null)
                                                 {
-                                                    double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
-                                                    totalIntensity[i, j] += denormalizedIntensity;
+                                                    double denormalizedIntensity = isotopePair.ChannelPeaks[i].GetDenormalizedIntensity(isotopePair.Parent.InjectionTime);
+                                                    totalIntensity[i, isotopePair.Isotope] += denormalizedIntensity;
                                                     totalIntensity[i, numIsotopes] += denormalizedIntensity;
                                                 }
                                             }
@@ -8300,80 +9848,22 @@ namespace Coon.NeuQuant
                             }
                         }
                     }
-                }
+                }*/
 
-                // Purity correct all lysine-based NeuCode
-                //if (Form1.LYSINEPURITYCORRECTION)
-                //{
-                //    Dictionary<int, double> purityCorrections = Form1.CORRECTIONFACTORS;
-                //    // 2-plex NeuCode
-                //    if (numIsotopologues == 2)
-                //    {
-                //        for (int i = 0; i < numChannels; i += numIsotopologues)
-                //        {
-                //            totalIntensity[i, numIsotopes] = totalIntensity[i, numIsotopes] / purityCorrections[1];
-                //            totalIntensity[i + 1, numIsotopes] = totalIntensity[i + 1, numIsotopes] / purityCorrections[6];
+                // Purity correct experiments
+                /*if (Form1.LYSINEPURITYCORRECTION)
+                {
+                    for (int i = 0; i < numChannels; i++)
+                    {
+                        for (int n = 0; n <= numIsotopes; n++)
+                        {
+                            totalIntensity[i, n] = totalIntensity[i, n] / Form1.CHANNELIMPURITIES[i];
+                            completeTotalIntensity[i, n] = completeTotalIntensity[i, n] / Form1.CHANNELIMPURITIES[i];
+                        }
+                    }
+                } */
 
-                //            completeTotalIntensity[i, numIsotopes] = completeTotalIntensity[i, numIsotopes] / purityCorrections[1];
-                //            completeTotalIntensity[i + 1, numIsotopes] = completeTotalIntensity[i + 1, numIsotopes] / purityCorrections[6];
-                //        }
-                //    }
-
-                //    // 3-plex NeuCode
-                //    else if (numIsotopologues == 3)
-                //    {
-                //        for (int i = 0; i < numChannels; i += numIsotopologues)
-                //        {
-                //            totalIntensity[i, numIsotopes] = totalIntensity[i, numIsotopes] / purityCorrections[1];
-                //            totalIntensity[i + 1, numIsotopes] = totalIntensity[i + 1, numIsotopes] / purityCorrections[4];
-                //            totalIntensity[i + 2, numIsotopes] = totalIntensity[i + 2, numIsotopes] / purityCorrections[6];
-
-                //            completeTotalIntensity[i, numIsotopes] = completeTotalIntensity[i, numIsotopes] / purityCorrections[1];
-                //            completeTotalIntensity[i + 1, numIsotopes] = completeTotalIntensity[i + 1, numIsotopes] / purityCorrections[4];
-                //            completeTotalIntensity[i + 2, numIsotopes] = completeTotalIntensity[i + 2, numIsotopes] / purityCorrections[6];
-                //        }
-                //    }
-
-                //    // 4-plex NeuCode
-                //    else if (numIsotopologues == 4)
-                //    {
-                //        for (int i = 0; i < numChannels; i += numIsotopologues)
-                //        {
-                //            totalIntensity[i, numIsotopes] = totalIntensity[i, numIsotopes] / purityCorrections[1];
-                //            totalIntensity[i + 1, numIsotopes] = totalIntensity[i + 1, numIsotopes] / purityCorrections[3];
-                //            totalIntensity[i + 2, numIsotopes] = totalIntensity[i + 2, numIsotopes] / purityCorrections[5];
-                //            totalIntensity[i + 3, numIsotopes] = totalIntensity[i + 3, numIsotopes] / purityCorrections[6];
-
-                //            completeTotalIntensity[i, numIsotopes] = completeTotalIntensity[i, numIsotopes] / purityCorrections[1];
-                //            completeTotalIntensity[i + 1, numIsotopes] = completeTotalIntensity[i + 1, numIsotopes] / purityCorrections[3];
-                //            completeTotalIntensity[i + 2, numIsotopes] = completeTotalIntensity[i + 2, numIsotopes] / purityCorrections[5];
-                //            completeTotalIntensity[i + 3, numIsotopes] = completeTotalIntensity[i + 3, numIsotopes] / purityCorrections[6];
-                //        }
-                //    }
-
-                //    // 6-plex NeuCode
-                //    else if (numIsotopologues == 6)
-                //    {
-                //        for (int i = 0; i < numChannels; i += numIsotopologues)
-                //        {
-                //            totalIntensity[i, numIsotopes] = totalIntensity[i, numIsotopes] / purityCorrections[1];
-                //            totalIntensity[i + 1, numIsotopes] = totalIntensity[i + 1, numIsotopes] / purityCorrections[2];
-                //            totalIntensity[i + 2, numIsotopes] = totalIntensity[i + 2, numIsotopes] / purityCorrections[3];
-                //            totalIntensity[i + 3, numIsotopes] = totalIntensity[i + 3, numIsotopes] / purityCorrections[4];
-                //            totalIntensity[i + 4, numIsotopes] = totalIntensity[i + 4, numIsotopes] / purityCorrections[5];
-                //            totalIntensity[i + 5, numIsotopes] = totalIntensity[i + 5, numIsotopes] / purityCorrections[6];
-
-                //            completeTotalIntensity[i, numIsotopes] = completeTotalIntensity[i, numIsotopes] / purityCorrections[1];
-                //            completeTotalIntensity[i + 1, numIsotopes] = completeTotalIntensity[i + 1, numIsotopes] / purityCorrections[2];
-                //            completeTotalIntensity[i + 2, numIsotopes] = completeTotalIntensity[i + 2, numIsotopes] / purityCorrections[3];
-                //            completeTotalIntensity[i + 3, numIsotopes] = completeTotalIntensity[i + 3, numIsotopes] / purityCorrections[4];
-                //            completeTotalIntensity[i + 4, numIsotopes] = completeTotalIntensity[i + 4, numIsotopes] / purityCorrections[5];
-                //            completeTotalIntensity[i + 5, numIsotopes] = completeTotalIntensity[i + 5, numIsotopes] / purityCorrections[6];
-                //        }
-                //    }
-                //}
-
-                if (coalescenceDetected)
+                /*if (coalescenceDetected)
                 {
                     //Use only complete pairs for quantification
                     for (int c = 0; c < numClusters; c++)
@@ -8411,9 +9901,13 @@ namespace Coon.NeuQuant
                             quantifiedNoiseIncluded[c] = false;
                             noQuantReason = NonQuantifiableType.Quantified;
 
-                            foreach (MSDataFile rawFile in completePairs.Keys)
+                            if (final[0, 1] > 0) mergeCompleteAllLists();
+                            else
                             {
-                                allPairs[rawFile] = completePairs[rawFile];
+                                foreach (MSDataFile rawFile in completePairs.Keys)
+                                {
+                                    allPairs[rawFile] = completePairs[rawFile];
+                                }
                             }
 
                             // Use only complete pairs for quantification
@@ -8427,8 +9921,8 @@ namespace Coon.NeuQuant
                             // Use only complete pairs for quantification
                             for (int n = index2; n < channelIndex + numIsotopologues; n++)
                             {
-                                lightInt = completeTotalIntensity[index1, numIsotopes];
-                                heavyInt = completeTotalIntensity[n, numIsotopes];
+                                lightInt = totalIntensity[index1, numIsotopes];
+                                heavyInt = totalIntensity[n, numIsotopes];
 
                                 if (lightInt > 0 && heavyInt > 0)
                                 {
@@ -8442,6 +9936,8 @@ namespace Coon.NeuQuant
                             finalQuantified[c] = final[c, 0] + final[c, 1];
                             quantifiedNoiseIncluded[c] = true;
                             noQuantReason = NonQuantifiableType.Quantified;
+
+                            if (final[0, 1] > 0) mergeCompleteAllLists();
 
                             // Use only complete pairs for quantification
                             for (int i = channelIndex; i < channelIndex + numIsotopologues; i++)
@@ -8484,80 +9980,67 @@ namespace Coon.NeuQuant
                             }
                         }
                     }
-                }
+                }*/
             }
+
             // Traditional SILAC
+
             else
             {
                 int[,] final = new int[1, 2];
-                quantifiedNoiseIncluded = new bool[1];
-                finalQuantified = new int[1];
-
-                double lightInt;
-                double heavyInt;
-                bool quantified = false;
-                int minimumTotalPairs;
-                int minimumNoNBCPairs;
-                int minimumPostQFPairs;
-
-                if (Form1.MULTIINJECT)
-                {
-                    minimumTotalPairs = 1;
-                    minimumNoNBCPairs = 1;
-                    minimumPostQFPairs = 1;
-                }
-                else
-                {
-                    minimumTotalPairs = 3;
-                    minimumNoNBCPairs = 3;
-                    minimumPostQFPairs = 3;
-                }
-
-                // First try to quantify based on complete sets of isotopologues
                 if (completePairs != null && completePairs.Count > 0)
                 {
                     foreach (List<Pair> pairs in completePairs.Values)
                     {
                         foreach (Pair pair in pairs)
                         {
-                            for (int j = 0; j < numIsotopes; j++)
+                            foreach (IsotopePair isotopePair in pair.IsotopePairs)
                             {
-                                if (Form1.QUANTFILTER)
-                                {
-                                    // Eliminate low-level pairs by quantitative filtering
-                                    if (quantFilter(pair, j, 0, true))
+                                    if (Form1.QUANTFILTER)
                                     {
-                                        for (int i = 0; i < numChannels; i++)
+                                        // Eliminate low-level pairs by quantitative filtering
+                                        if (quantFilter(isotopePair, 0, true))
                                         {
-                                            double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
-                                            completeTotalIntensity[i, j] += denormalizedIntensity;
-                                            completeTotalIntensity[i, numIsotopes] += denormalizedIntensity;
+                                            //for (int i = 0; i < numChannels; i++)
+                                            //{
+                                            //    double denormalizedIntensity = isotopePair.ChannelPeaks[i].GetDenormalizedIntensity(pair.InjectionTime);
+                                            //    completeTotalIntensity[i, isotopePair.Isotope] += denormalizedIntensity;
+                                            //    completeTotalIntensity[i, numIsotopes] += denormalizedIntensity;
+                                            //}
+                                            isotopePairsToQuantify.Add(isotopePair);
+                                            final[0, 1]++;
                                         }
+                                    }
+                                    else if (Form1.ISOTOPEQUANT)
+                                    {
+                                        quantFilter(isotopePair, 0, true);
+                                        isotopesToQuantify[isotopePair.Isotope].Add(isotopePair);
+                                        isotopePairsToQuantify.Add(isotopePair);
                                         final[0, 1]++;
                                     }
-                                }
-                                else
-                                {
-                                    bool noNullPeaks = true;
-                                    for (int i = 0; i < numChannels; i++)
-                                    {
-                                        if (pair.peaks[i, j] == null)
-                                        {
-                                            noNullPeaks = false;
-                                        }
-                                    }
+                                    //else
+                                    //{
+                                    //    bool noNullPeaks = true;
+                                    //    for (int i = 0; i < numChannels; i++)
+                                    //    {
+                                    //        if (isotopePair.ChannelPeaks[i] == null)
+                                    //        {
+                                    //            noNullPeaks = false;
+                                    //        }
+                                    //    }
 
-                                    if (noNullPeaks)
-                                    {
-                                        for (int i = 0; i < numChannels; i++)
-                                        {
-                                            double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
-                                            completeTotalIntensity[i, j] += denormalizedIntensity;
-                                            completeTotalIntensity[i, numIsotopes] += denormalizedIntensity;
-                                        }
-                                        final[0, 1]++;
-                                    }
-                                }
+                                    //    if (noNullPeaks)
+                                    //    {
+                                    //        for (int i = 0; i < numChannels; i++)
+                                    //        {
+                                    //            double denormalizedIntensity = isotopePair.ChannelPeaks[i].GetDenormalizedIntensity(isotopePair.Parent.InjectionTime);
+                                    //            completeTotalIntensity[i, isotopePair.Isotope] += denormalizedIntensity;
+                                    //            completeTotalIntensity[i, numIsotopes] += denormalizedIntensity;
+                                    //        }
+                                    //        isotopePairsToQuantify.Add(isotopePair);
+                                    //        final[0, 1]++;
+                                    //    }
+                                    //}
                             } // End isotope loop
                         } // End pair loop
                     } // End pair list loop
@@ -8568,367 +10051,696 @@ namespace Coon.NeuQuant
                     {
                         foreach (Pair pair in pairs)
                         {
-                            for (int j = 0; j < numIsotopes; j++)
+                            foreach (IsotopePair isotopePair in pair.IsotopePairs)
                             {
                                 if (Form1.QUANTFILTER)
                                 {
                                     //Use a peak's intensity if it is not noise-band capped and its intensity is greater than 1/2e of the maximum intensity
-                                    if (quantFilter(pair, j, 0, false))
+                                    if (quantFilter(isotopePair, 0, false))
                                     {
-                                        for (int i = 0; i < numChannels; i++)
-                                        {
-                                            double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
-                                            totalIntensity[i, j] += denormalizedIntensity;
-                                            totalIntensity[i, numIsotopes] += denormalizedIntensity;
+                                        //for (int i = 0; i < numChannels; i++)
+                                        //{
+                                        //    double denormalizedIntensity = isotopePair.ChannelPeaks[i].GetDenormalizedIntensity(isotopePair.Parent.InjectionTime);
+                                        //    totalIntensity[i, isotopePair.Isotope] += denormalizedIntensity;
+                                        //    totalIntensity[i, numIsotopes] += denormalizedIntensity;
 
-                                        }
+                                        //}
+                                        isotopePairsToQuantify.Add(isotopePair);
                                         final[0, 0]++;
                                     }
                                 }
-                                else
+                                else if (Form1.ISOTOPEQUANT)
                                 {
-                                    bool noNullPeaks = true;
-                                    int realPeaks = 0;
-                                    for (int i = 0; i < numChannels; i++)
-                                    {
-                                        if (pair.peaks[i, j] == null)
-                                        {
-                                            noNullPeaks = false;
-                                        }
-                                        else
-                                        {
-                                            realPeaks++;
-                                        }
-                                    }
-
-                                    if (noNullPeaks)
-                                    {
-                                        for (int i = 0; i < numChannels; i++)
-                                        {
-                                            if (pair.peaks[i, j] != null)
-                                            {
-                                                double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
-                                                totalIntensity[i, j] += denormalizedIntensity;
-                                                totalIntensity[i, numIsotopes] += denormalizedIntensity;
-                                            }
-                                        }
-                                        final[0, 0]++;
-                                    }
+                                    quantFilter(isotopePair, 0, false);
+                                    isotopesToQuantify[isotopePair.Isotope].Add(isotopePair);
+                                    isotopePairsToQuantify.Add(isotopePair);
+                                    final[0, 0]++;
                                 }
+                                //else
+                                //{
+                                //    bool noNullPeaks = true;
+                                //    int realPeaks = 0;
+                                //    for (int i = 0; i < numChannels; i++)
+                                //    {
+                                //        if (isotopePair.ChannelPeaks[i] == null)
+                                //        {
+                                //            noNullPeaks = false;
+                                //        }
+                                //        else
+                                //        {
+                                //            realPeaks++;
+                                //        }
+                                //    }
+
+                                //    if (noNullPeaks)
+                                //    {
+                                //        for (int i = 0; i < numChannels; i++)
+                                //        {
+                                //            if (isotopePair.ChannelPeaks[i] != null)
+                                //            {
+                                //                double denormalizedIntensity = isotopePair.ChannelPeaks[i].GetDenormalizedIntensity(isotopePair.Parent.InjectionTime);
+                                //                totalIntensity[i, isotopePair.Isotope] += denormalizedIntensity;
+                                //                totalIntensity[i, numIsotopes] += denormalizedIntensity;
+                                //            }
+                                //        }
+                                //        isotopePairsToQuantify.Add(isotopePair);
+                                //        final[0, 0]++;
+                                //    }
+                                //}
                             }
                         }
                     }
                 }
 
-                // Purity correct all lysine-based NeuCode
-                //if (Form1.LYSINEPURITYCORRECTION)
-                //{
-                //    Dictionary<int, double> purityCorrections = Form1.CORRECTIONFACTORS;
-                //    // 2-plex NeuCode
-                //    if (numIsotopologues == 2)
-                //    {
-                //        for (int i = 0; i < numChannels; i += numIsotopologues)
-                //        {
-                //            totalIntensity[i, numIsotopes] = totalIntensity[i, numIsotopes] / purityCorrections[1];
-                //            totalIntensity[i + 1, numIsotopes] = totalIntensity[i + 1, numIsotopes] / purityCorrections[6];
+                quantifiedNoiseIncluded = new bool[1];
+                quantifiedNoiseIncluded[0] = true;
+                finalQuantified = new int[1];
 
-                //            completeTotalIntensity[i, numIsotopes] = completeTotalIntensity[i, numIsotopes] / purityCorrections[1];
-                //            completeTotalIntensity[i + 1, numIsotopes] = completeTotalIntensity[i + 1, numIsotopes] / purityCorrections[6];
-                //        }
-                //    }
+                double lightInt;
+                double heavyInt;
+                bool quantified = false;
+                int minimumTotalPairs = 3;
+                int minimumNoNBCPairs = 3;
+                int minimumPostQFPairs = 3;
 
-                //    // 3-plex NeuCode
-                //    else if (numIsotopologues == 3)
-                //    {
-                //        for (int i = 0; i < numChannels; i += numIsotopologues)
-                //        {
-                //            totalIntensity[i, numIsotopes] = totalIntensity[i, numIsotopes] / purityCorrections[1];
-                //            totalIntensity[i + 1, numIsotopes] = totalIntensity[i + 1, numIsotopes] / purityCorrections[4];
-                //            totalIntensity[i + 2, numIsotopes] = totalIntensity[i + 2, numIsotopes] / purityCorrections[6];
-
-                //            completeTotalIntensity[i, numIsotopes] = completeTotalIntensity[i, numIsotopes] / purityCorrections[1];
-                //            completeTotalIntensity[i + 1, numIsotopes] = completeTotalIntensity[i + 1, numIsotopes] / purityCorrections[4];
-                //            completeTotalIntensity[i + 2, numIsotopes] = completeTotalIntensity[i + 2, numIsotopes] / purityCorrections[6];
-                //        }
-                //    }
-
-                //    // 4-plex NeuCode
-                //    else if (numIsotopologues == 4)
-                //    {
-                //        for (int i = 0; i < numChannels; i += numIsotopologues)
-                //        {
-                //            totalIntensity[i, numIsotopes] = totalIntensity[i, numIsotopes] / purityCorrections[1];
-                //            totalIntensity[i + 1, numIsotopes] = totalIntensity[i + 1, numIsotopes] / purityCorrections[3];
-                //            totalIntensity[i + 2, numIsotopes] = totalIntensity[i + 2, numIsotopes] / purityCorrections[5];
-                //            totalIntensity[i + 3, numIsotopes] = totalIntensity[i + 3, numIsotopes] / purityCorrections[6];
-
-                //            completeTotalIntensity[i, numIsotopes] = completeTotalIntensity[i, numIsotopes] / purityCorrections[1];
-                //            completeTotalIntensity[i + 1, numIsotopes] = completeTotalIntensity[i + 1, numIsotopes] / purityCorrections[3];
-                //            completeTotalIntensity[i + 2, numIsotopes] = completeTotalIntensity[i + 2, numIsotopes] / purityCorrections[5];
-                //            completeTotalIntensity[i + 3, numIsotopes] = completeTotalIntensity[i + 3, numIsotopes] / purityCorrections[6];
-                //        }
-                //    }
-
-                //    // 6-plex NeuCode
-                //    else if (numIsotopologues == 6)
-                //    {
-                //        for (int i = 0; i < numChannels; i += numIsotopologues)
-                //        {
-                //            totalIntensity[i, numIsotopes] = totalIntensity[i, numIsotopes] / purityCorrections[1];
-                //            totalIntensity[i + 1, numIsotopes] = totalIntensity[i + 1, numIsotopes] / purityCorrections[2];
-                //            totalIntensity[i + 2, numIsotopes] = totalIntensity[i + 2, numIsotopes] / purityCorrections[3];
-                //            totalIntensity[i + 3, numIsotopes] = totalIntensity[i + 3, numIsotopes] / purityCorrections[4];
-                //            totalIntensity[i + 4, numIsotopes] = totalIntensity[i + 4, numIsotopes] / purityCorrections[5];
-                //            totalIntensity[i + 5, numIsotopes] = totalIntensity[i + 5, numIsotopes] / purityCorrections[6];
-
-                //            completeTotalIntensity[i, numIsotopes] = completeTotalIntensity[i, numIsotopes] / purityCorrections[1];
-                //            completeTotalIntensity[i + 1, numIsotopes] = completeTotalIntensity[i + 1, numIsotopes] / purityCorrections[2];
-                //            completeTotalIntensity[i + 2, numIsotopes] = completeTotalIntensity[i + 2, numIsotopes] / purityCorrections[3];
-                //            completeTotalIntensity[i + 3, numIsotopes] = completeTotalIntensity[i + 3, numIsotopes] / purityCorrections[4];
-                //            completeTotalIntensity[i + 4, numIsotopes] = completeTotalIntensity[i + 4, numIsotopes] / purityCorrections[5];
-                //            completeTotalIntensity[i + 5, numIsotopes] = completeTotalIntensity[i + 5, numIsotopes] / purityCorrections[6];
-                //        }
-                //    }
-                //}
-
-                if (final[0, 1] >= minimumPostQFPairs)
+                if (Form1.LYSINEPURITYCORRECTION)
                 {
+                    for (int i = 0; i < numChannels; i++)
+                    {
+                        for (int n = 0; n <= numIsotopes; n++)
+                        {
+                            completeTotalIntensity[i, n] = completeTotalIntensity[i, n] / Form1.CHANNELIMPURITIES[i];
+                            totalIntensity[i, n] = totalIntensity[i, n] / Form1.CHANNELIMPURITIES[i];
+                        }
+                    }
+                }
+
+                // Find the median ratio pairs and use for quantification
+                if (final[0, 1] >= minimumTotalPairs)
+                {
+                    //mergeCompleteAllLists();
+                    //List<IsotopePair> assembledCompletePairs = new List<IsotopePair>();
+                    //foreach (List<Pair> complete in completePairs.Values)
+                    //{
+                    //    foreach (Pair completePair in complete)
+                    //    {
+                    //        foreach (IsotopePair completeIsotopePair in completePair.IsotopePairs)
+                    //        {
+                    //            assembledCompletePairs.Add(completeIsotopePair);
+                    //        }
+                    //    }
+                    //}
+                    List<IsotopePair> pairsToQuantify = findMedianPairs(isotopePairsToQuantify);
+                    medianCompleteTotalIntensity = new double[numChannels];
+
+                    foreach (IsotopePair quantifiedPair in pairsToQuantify)
+                    {
+                        for (int c = 0; c < numChannels; c++)
+                        {
+                            medianCompleteTotalIntensity[c] += quantifiedPair.ChannelPeaks[c].GetDenormalizedIntensity(quantifiedPair.Parent.InjectionTime);
+                        }
+                    }
+
                     finalQuantified[0] = final[0, 1];
                     quantifiedNoiseIncluded[0] = false;
                     noQuantReason = NonQuantifiableType.Quantified;
 
-                    totalIntensity = completeTotalIntensity;
-                    
-                    int index1 = 0;
-                    int index2 = index1 + 1;
-                    
-                    // Use only complete pairs for quantification
-                    for (int i = index2; i < numChannels - 1; i++)
+                    foreach (MSDataFile rawFile in completePairs.Keys)
                     {
-                        // Use only complete pairs for quantification
-                        lightInt = completeTotalIntensity[index1, numIsotopes];
-                        heavyInt = completeTotalIntensity[i, numIsotopes];
+                        allPairs[rawFile] = completePairs[rawFile];
+                    }
 
-                        if (lightInt > 0 && heavyInt > 0)
+                    // Use only complete pairs for quantification
+                    for (int i = 0; i < numChannels; i++)
+                    {
+                        for (int s = 0; s <= numIsotopes; s++)
                         {
-                            heavyToLightRatioSum[index2 - 1, 0] = heavyInt / lightInt;
+                            totalIntensity[i, s] = completeTotalIntensity[i, s];
                         }
                     }
-                }
-                else if (final[0, 0] + final[0, 1] >= minimumPostQFPairs)
-                {
-                    finalQuantified[0] = final[0, 0] + final[0, 1];
-                    quantifiedNoiseIncluded[0] = true;
-                    noQuantReason = NonQuantifiableType.Quantified;
-                    
+
                     int index1 = 0;
                     int index2 = index1 + 1;
-                    totalIntensity[index1, numIsotopes] += completeTotalIntensity[index1, numIsotopes];
-                    
                     // Use only complete pairs for quantification
-                    for (int i = index2; i < numChannels - 1; i++)
+                    for (int n = index2; n < numChannels; n++)
                     {
-                        totalIntensity[i, numIsotopes] += completeTotalIntensity[i, numIsotopes];
-                        // Use only complete pairs for quantification
                         lightInt = totalIntensity[index1, numIsotopes];
-                        heavyInt = totalIntensity[i, numIsotopes];
+                        heavyInt = totalIntensity[n, numIsotopes];
 
                         if (lightInt > 0 && heavyInt > 0)
                         {
-                            heavyToLightRatioSum[index2 - 1, 0] = heavyInt / lightInt;
+                            heavyToLightRatioSum[n - 1] = heavyInt / lightInt;
                         }
+                        index2++;
+                    }
+                }
+                else if (final[0, 1] + final[0, 0] >= minimumTotalPairs)
+                {
+                    mergeCompleteAllLists();
+
+                    //List<IsotopePair> assembledPairs = new List<IsotopePair>();
+                    //foreach (List<Pair> all in allPairs.Values)
+                    //{
+                    //    foreach (Pair pair in all)
+                    //    {
+                    //        foreach (IsotopePair isotopePair in pair.IsotopePairs)
+                    //        {
+                    //            assembledPairs.Add(isotopePair);
+                    //        }
+                    //    }
+                    //}
+                    //List<IsotopePair> pairsToQuantify = findMedianPairs(assembledPairs);
+
+                    List<IsotopePair> pairsToQuantify = findMedianPairs(isotopePairsToQuantify);
+                    medianTotalIntensity = new double[numChannels];
+
+                    foreach (IsotopePair quantifiedPair in pairsToQuantify)
+                    {
+                        for (int c = 0; c < numChannels; c++)
+                        {
+                            medianTotalIntensity[c] += quantifiedPair.ChannelPeaks[c].GetDenormalizedIntensity(quantifiedPair.Parent.InjectionTime);
+                        }
+                    }
+
+                    for (int i = 0; i < numChannels; i++)
+                    {
+                        for (int s = 0; s <= numIsotopes; s++)
+                        {
+                            totalIntensity[i, s] += completeTotalIntensity[i, s];
+                        }
+                    }
+
+                    finalQuantified[0] = final[0, 1] + final[0, 0];
+                    quantifiedNoiseIncluded[0] = true;
+                    noQuantReason = NonQuantifiableType.Quantified;
+
+                    int index1 = 0;
+                    int index2 = index1 + 1;
+                    // Use only complete pairs for quantification
+                    for (int n = index2; n < numChannels; n++)
+                    {
+                        lightInt = totalIntensity[index1, numIsotopes];
+                        heavyInt = totalIntensity[n, numIsotopes];
+
+                        if (lightInt > 0 && heavyInt > 0)
+                        {
+                            heavyToLightRatioSum[n - 1] = heavyInt / lightInt;
+                        }
+                        index2++;
                     }
                 }
                 else
                 {
-                    if (countAllIsotopes[0] + countCompleteIsotopes[0] >= minimumPostQFPairs)
-                    {
-                        noQuantReason = NonQuantifiableType.WrongElutionProfiles;
-                    }
-                    else if (countAllIsotopes[0] + countCompleteIsotopes[0] > 0)
+                    if (countAllIsotopes[0] + countCompleteIsotopes[0] < minimumTotalPairs)
                     {
                         noQuantReason = NonQuantifiableType.NotEnoughMeasurements;
                     }
-
                     // Not able to quantify
                     for (int i = 0; i < numChannels; i++)
                     {
-                        completeTotalIntensity[i, numIsotopes] = 0;
-                        totalIntensity[i, numIsotopes] = 0;
+                        for (int s = 0; s <= numIsotopes; s++)
+                        {
+                            completeTotalIntensity[i, s] = 0;
+                            totalIntensity[i, s] = 0;
+                        }
                     }
                 }
+            }
+            //else
+            //{
+            //    int[,] final = new int[1, 2];
+            //    quantifiedNoiseIncluded = new bool[1];
+            //    finalQuantified = new int[1];
 
-                //int[,] final = new int[1, 2];
-                //quantifiedNoiseIncluded = new bool[1];
-                //finalQuantified = new int[1];
+            //    double lightInt;
+            //    double heavyInt;
+            //    bool quantified = false;
+            //    int minimumTotalPairs;
+            //    int minimumNoNBCPairs;
+            //    int minimumPostQFPairs;
 
-                //if (completePairs != null && completePairs.Count > 0)
-                //{
-                //    foreach (List<Pair> pairs in completePairs.Values)
-                //    {
-                //        foreach (Pair pair in pairs)
-                //        {
-                //            for (int j = 0; j < numIsotopes; j++)
-                //            {
-                //                if (Form1.QUANTFILTER)
-                //                {
-                //                    // Eliminate low-level pairs by quantitative filtering
-                //                    if (quantFilter(pair, j, 0, true))
-                //                    {
-                //                        for (int i = 0; i < numChannels; i++)
-                //                        {
-                //                            double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
-                //                            completeTotalIntensity[i, j] += denormalizedIntensity;
-                //                            completeTotalIntensity[i, numIsotopes] += denormalizedIntensity;
-                //                        }
-                //                        final[0, 1]++;
-                //                    }
-                //                }
-                //                else
-                //                {
-                //                    bool noNullPeaks = true;
-                //                    for (int i = 0; i < numChannels; i++)
-                //                    {
-                //                        if (pair.peaks[i, j] == null)
-                //                        {
-                //                            noNullPeaks = false;
-                //                        }
-                //                    }
+            //    if (Form1.MULTIINJECT)
+            //    {
+            //        minimumTotalPairs = 1;
+            //        minimumNoNBCPairs = 1;
+            //        minimumPostQFPairs = 1;
+            //    }
+            //    else
+            //    {
+            //        minimumTotalPairs = 3;
+            //        minimumNoNBCPairs = 3;
+            //        minimumPostQFPairs = 3;
+            //    }
 
-                //                    if (noNullPeaks)
-                //                    {
-                //                        for (int i = 0; i < numChannels; i++)
-                //                        {
-                //                            double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
-                //                            completeTotalIntensity[i, j] += denormalizedIntensity;
-                //                            completeTotalIntensity[i, numIsotopes] += denormalizedIntensity;
-                //                        }
-                //                        final[0, 1]++;
-                //                    }
-                //                }
-                //            } // End isotope loop
-                //        } // End pair loop
-                //    } // End pair list loop
-                //}
-                //if (allPairs != null && allPairs.Count > 0)
-                //{
-                //    foreach (List<Pair> pairs in allPairs.Values)
-                //    {
-                //        foreach (Pair pair in pairs)
-                //        {
-                //            for (int j = 0; j < numIsotopes; j++)
-                //            {
-                //                if (Form1.QUANTFILTER)
-                //                {
-                //                    //Use a peak's intensity if it is not noise-band capped and its intensity is greater than 1/2e of the maximum intensity
+            //    // First try to quantify based on complete sets of isotopologues
+            //    if (completePairs != null && completePairs.Count > 0)
+            //    {
+            //        foreach (List<Pair> pairs in completePairs.Values)
+            //        {
+            //            foreach (Pair pair in pairs)
+            //            {
+            //                foreach (IsotopePair isotopePair in pair.IsotopePairs)
+            //                {
+            //                    if (Form1.QUANTFILTER)
+            //                    {
+            //                        // Eliminate low-level pairs by quantitative filtering
+            //                        if (quantFilter(isotopePair, 0, true))
+            //                        {
+            //                            for (int i = 0; i < numChannels; i++)
+            //                            {
+            //                                double denormalizedIntensity = isotopePair.ChannelPeaks[i].GetDenormalizedIntensity(isotopePair.Parent.InjectionTime);
+            //                                completeTotalIntensity[i, isotopePair.Isotope] += denormalizedIntensity;
+            //                                completeTotalIntensity[i, numIsotopes] += denormalizedIntensity;
+            //                            }
+            //                            final[0, 1]++;
+            //                        }
+            //                    }
+            //                    else
+            //                    {
+            //                        bool noNullPeaks = true;
+            //                        for (int i = 0; i < numChannels; i++)
+            //                        {
+            //                            if (isotopePair.ChannelPeaks[i] == null)
+            //                            {
+            //                                noNullPeaks = false;
+            //                            }
+            //                        }
 
-                //                    if (quantFilter(pair, j, 0, false))
-                //                    {
-                //                        for (int i = 0; i < numChannels; i++)
-                //                        {
-                //                            double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
-                //                            totalIntensity[i, j] += denormalizedIntensity;
-                //                            totalIntensity[i, numIsotopes] += denormalizedIntensity;
+            //                        if (noNullPeaks)
+            //                        {
+            //                            for (int i = 0; i < numChannels; i++)
+            //                            {
+            //                                double denormalizedIntensity = isotopePair.ChannelPeaks[i].GetDenormalizedIntensity(isotopePair.Parent.InjectionTime);
+            //                                completeTotalIntensity[i, isotopePair.Isotope] += denormalizedIntensity;
+            //                                completeTotalIntensity[i, numIsotopes] += denormalizedIntensity;
+            //                            }
+            //                            final[0, 1]++;
+            //                        }
+            //                    }
+            //                } // End isotope loop
+            //            } // End pair loop
+            //        } // End pair list loop
+            //    }
+            //    if (allPairs != null && allPairs.Count > 0)
+            //    {
+            //        foreach (List<Pair> pairs in allPairs.Values)
+            //        {
+            //            foreach (Pair pair in pairs)
+            //            {
+            //                foreach (IsotopePair isotopePair in pair.IsotopePairs)
+            //                {
+            //                    if (Form1.QUANTFILTER)
+            //                    {
+            //                        //Use a peak's intensity if it is not noise-band capped and its intensity is greater than 1/2e of the maximum intensity
+            //                        if (quantFilter(isotopePair, 0, false))
+            //                        {
+            //                            for (int i = 0; i < numChannels; i++)
+            //                            {
+            //                                double denormalizedIntensity = isotopePair.ChannelPeaks[i].GetDenormalizedIntensity(isotopePair.Parent.InjectionTime);
+            //                                totalIntensity[i, isotopePair.Isotope] += denormalizedIntensity;
+            //                                totalIntensity[i, numIsotopes] += denormalizedIntensity;
 
-                //                        }
-                //                        final[0, 0]++;
-                //                    }
-                //                }
-                //                else
-                //                {
-                //                    bool noNullPeaks = true;
-                //                    int realPeaks = 0;
-                //                    for (int i = 0; i < numChannels; i++)
-                //                    {
-                //                        if (pair.peaks[i, j] == null)
-                //                        {
-                //                            noNullPeaks = false;
-                //                        }
-                //                        else
-                //                        {
-                //                            realPeaks++;
-                //                        }
-                //                    }
+            //                            }
+            //                            final[0, 0]++;
+            //                        }
+            //                    }
+            //                    else
+            //                    {
+            //                        bool noNullPeaks = true;
+            //                        int realPeaks = 0;
+            //                        for (int i = 0; i < numChannels; i++)
+            //                        {
+            //                            if (isotopePair.ChannelPeaks[i] == null)
+            //                            {
+            //                                noNullPeaks = false;
+            //                            }
+            //                            else
+            //                            {
+            //                                realPeaks++;
+            //                            }
+            //                        }
 
-                //                    if (noNullPeaks)
-                //                    {
-                //                        for (int i = 0; i < numChannels; i++)
-                //                        {
-                //                            if (pair.peaks[i, j] != null)
-                //                            {
-                //                                double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
-                //                                totalIntensity[i, j] += denormalizedIntensity;
-                //                                totalIntensity[i, numIsotopes] += denormalizedIntensity;
-                //                            }
-                //                        }
-                //                        final[0, 0]++;
-                //                    }
-                //                }
-                //            }
-                //        }
-                //    }
-                //}
+            //                        if (noNullPeaks)
+            //                        {
+            //                            for (int i = 0; i < numChannels; i++)
+            //                            {
+            //                                if (isotopePair.ChannelPeaks[i] != null)
+            //                                {
+            //                                    double denormalizedIntensity = isotopePair.ChannelPeaks[i].GetDenormalizedIntensity(isotopePair.Parent.InjectionTime);
+            //                                    totalIntensity[i, isotopePair.Isotope] += denormalizedIntensity;
+            //                                    totalIntensity[i, numIsotopes] += denormalizedIntensity;
+            //                                }
+            //                            }
+            //                            final[0, 0]++;
+            //                        }
+            //                    }
+            //                }
+            //            }
+            //        }
+            //    }
 
-                //double lightInt;
-                //double heavyInt;
-                //bool quantified = false;
-                //int minimumTotalPairs = 3;
-                //int minimumNoNBCPairs = 3;
-                //int minimumPostQFPairs = 3;
+            //    // Purity correct experiments
+            //    if (Form1.LYSINEPURITYCORRECTION)
+            //    {
+            //        for (int i = 0; i < numChannels; i++)
+            //        {
+            //            for (int n = 0; n <= numIsotopes; n++)
+            //            {
+            //                totalIntensity[i, n] = totalIntensity[i, n] / Form1.CHANNELIMPURITIES[i];
+            //                completeTotalIntensity[i, n] = completeTotalIntensity[i, n] / Form1.CHANNELIMPURITIES[i];
+            //            }
+            //        }
+            //    }
 
-                //if (final[0, 1] >= minimumPostQFPairs)
-                //{
-                //    finalQuantified[0] = final[0, 1];
-                //    quantifiedNoiseIncluded[0] = false;
+            //    if (final[0, 1] >= minimumPostQFPairs)
+            //    {
+            //        finalQuantified[0] = final[0, 1];
+            //        quantifiedNoiseIncluded[0] = false;
+            //        noQuantReason = NonQuantifiableType.Quantified;
 
-                //    for (int i = 1; i < numChannels; i++)
-                //    {
-                //        if (Form1.NOISEBANDCAP)
-                //        {
-                //            totalIntensity = completeTotalIntensity;
-                //        }
-                //        // Use only complete pairs for quantification
-                //        int index1 = 0;
-                //        int index2 = i;
+            //        if (final[0, 1] > 0) mergeCompleteAllLists();
+            //        else
+            //        {
+            //            foreach (MSDataFile rawFile in completePairs.Keys)
+            //            {
+            //                allPairs[rawFile] = completePairs[rawFile];
+            //            }
+            //        }
 
-                //        lightInt = completeTotalIntensity[index1, numIsotopes];
-                //        heavyInt = completeTotalIntensity[index2, numIsotopes];
+            //        // Use only complete pairs for quantification
+            //        for (int i = 0; i < numChannels; i++)
+            //        {
+            //            totalIntensity[i, numIsotopes] += completeTotalIntensity[i, numIsotopes];
+            //        }
+                    
+            //        int index1 = 0;
+            //        int index2 = index1 + 1;
+                    
+            //        for (int i = index2; i < numChannels; i++)
+            //        {
+            //            lightInt = totalIntensity[index1, numIsotopes];
+            //            heavyInt = totalIntensity[i, numIsotopes];
 
-                //        if (lightInt > 0 && heavyInt > 0)
-                //        {
-                //            heavyToLightRatioSum[i - 1, 0] = heavyInt / lightInt;
-                //        }
-                //    }
-                //}
-                //else if (final[0, 0] >= minimumPostQFPairs)
-                //{
-                //    finalQuantified[0] = final[0, 0];
-                //    quantifiedNoiseIncluded[0] = true;
+            //            if (lightInt > 0 && heavyInt > 0)
+            //            {
+            //                heavyToLightRatioSum[i - 1, 0] = heavyInt / lightInt;
+            //            }
+            //        }
+            //    }
+            //    else if (final[0, 0] + final[0, 1] >= minimumPostQFPairs)
+            //    {
+            //        finalQuantified[0] = final[0, 0] + final[0, 1];
+            //        quantifiedNoiseIncluded[0] = true;
+            //        noQuantReason = NonQuantifiableType.Quantified;
 
-                //    for (int i = 1; i < numChannels; i++)
-                //    {
-                //        int index1 = 0;
-                //        int index2 = i;
+            //        if (final[0, 1] > 0) mergeCompleteAllLists();
+                    
+            //        int index1 = 0;
+            //        int index2 = index1 + 1;
 
-                //        lightInt = totalIntensity[index1, numIsotopes];
-                //        heavyInt = totalIntensity[index2, numIsotopes];
+            //        // Use all pairs for quantification
+            //        for (int i = 0; i < numChannels; i++)
+            //        {
+            //            totalIntensity[i, numIsotopes] += completeTotalIntensity[i, numIsotopes];
+            //        }
+                    
+            //        for (int i = index2; i < numChannels; i++)
+            //        {
+            //            lightInt = totalIntensity[index1, numIsotopes];
+            //            heavyInt = totalIntensity[i, numIsotopes];
 
-                //        if (lightInt > 0 && heavyInt > 0)
-                //        {
-                //            heavyToLightRatioSum[i - 1, 0] = heavyInt / lightInt;
-                //        }
-                //    }
-                //}
-                //else
-                //{
-                //    // Not able to quantify
-                //    for (int i = 0; i < numChannels; i++)
-                //    {
-                //        completeTotalIntensity[i, numIsotopes] = 0;
-                //        totalIntensity[i, numIsotopes] = 0;
-                //    }
-                //}
-            }  
+            //            if (lightInt > 0 && heavyInt > 0)
+            //            {
+            //                heavyToLightRatioSum[i - 1, 0] = heavyInt / lightInt;
+            //            }
+            //        }
+            //    }
+            //    else
+            //    {
+            //        if (countAllIsotopes[0] + countCompleteIsotopes[0] >= minimumPostQFPairs)
+            //        {
+            //            noQuantReason = NonQuantifiableType.WrongElutionProfiles;
+            //        }
+            //        else if (countAllIsotopes[0] + countCompleteIsotopes[0] > 0)
+            //        {
+            //            noQuantReason = NonQuantifiableType.NotEnoughMeasurements;
+            //        }
+
+            //        // Not able to quantify
+            //        for (int i = 0; i < numChannels; i++)
+            //        {
+            //            completeTotalIntensity[i, numIsotopes] = 0;
+            //            totalIntensity[i, numIsotopes] = 0;
+            //        }
+            //    }
+
+            //    //int[,] final = new int[1, 2];
+            //    //quantifiedNoiseIncluded = new bool[1];
+            //    //finalQuantified = new int[1];
+
+            //    //if (completePairs != null && completePairs.Count > 0)
+            //    //{
+            //    //    foreach (List<Pair> pairs in completePairs.Values)
+            //    //    {
+            //    //        foreach (Pair pair in pairs)
+            //    //        {
+            //    //            for (int j = 0; j < numIsotopes; j++)
+            //    //            {
+            //    //                if (Form1.QUANTFILTER)
+            //    //                {
+            //    //                    // Eliminate low-level pairs by quantitative filtering
+            //    //                    if (quantFilter(pair, j, 0, true))
+            //    //                    {
+            //    //                        for (int i = 0; i < numChannels; i++)
+            //    //                        {
+            //    //                            double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
+            //    //                            completeTotalIntensity[i, j] += denormalizedIntensity;
+            //    //                            completeTotalIntensity[i, numIsotopes] += denormalizedIntensity;
+            //    //                        }
+            //    //                        final[0, 1]++;
+            //    //                    }
+            //    //                }
+            //    //                else
+            //    //                {
+            //    //                    bool noNullPeaks = true;
+            //    //                    for (int i = 0; i < numChannels; i++)
+            //    //                    {
+            //    //                        if (pair.peaks[i, j] == null)
+            //    //                        {
+            //    //                            noNullPeaks = false;
+            //    //                        }
+            //    //                    }
+
+            //    //                    if (noNullPeaks)
+            //    //                    {
+            //    //                        for (int i = 0; i < numChannels; i++)
+            //    //                        {
+            //    //                            double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
+            //    //                            completeTotalIntensity[i, j] += denormalizedIntensity;
+            //    //                            completeTotalIntensity[i, numIsotopes] += denormalizedIntensity;
+            //    //                        }
+            //    //                        final[0, 1]++;
+            //    //                    }
+            //    //                }
+            //    //            } // End isotope loop
+            //    //        } // End pair loop
+            //    //    } // End pair list loop
+            //    //}
+            //    //if (allPairs != null && allPairs.Count > 0)
+            //    //{
+            //    //    foreach (List<Pair> pairs in allPairs.Values)
+            //    //    {
+            //    //        foreach (Pair pair in pairs)
+            //    //        {
+            //    //            for (int j = 0; j < numIsotopes; j++)
+            //    //            {
+            //    //                if (Form1.QUANTFILTER)
+            //    //                {
+            //    //                    //Use a peak's intensity if it is not noise-band capped and its intensity is greater than 1/2e of the maximum intensity
+
+            //    //                    if (quantFilter(pair, j, 0, false))
+            //    //                    {
+            //    //                        for (int i = 0; i < numChannels; i++)
+            //    //                        {
+            //    //                            double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
+            //    //                            totalIntensity[i, j] += denormalizedIntensity;
+            //    //                            totalIntensity[i, numIsotopes] += denormalizedIntensity;
+
+            //    //                        }
+            //    //                        final[0, 0]++;
+            //    //                    }
+            //    //                }
+            //    //                else
+            //    //                {
+            //    //                    bool noNullPeaks = true;
+            //    //                    int realPeaks = 0;
+            //    //                    for (int i = 0; i < numChannels; i++)
+            //    //                    {
+            //    //                        if (pair.peaks[i, j] == null)
+            //    //                        {
+            //    //                            noNullPeaks = false;
+            //    //                        }
+            //    //                        else
+            //    //                        {
+            //    //                            realPeaks++;
+            //    //                        }
+            //    //                    }
+
+            //    //                    if (noNullPeaks)
+            //    //                    {
+            //    //                        for (int i = 0; i < numChannels; i++)
+            //    //                        {
+            //    //                            if (pair.peaks[i, j] != null)
+            //    //                            {
+            //    //                                double denormalizedIntensity = pair.peaks[i, j].GetDenormalizedIntensity(pair.injectionTime);
+            //    //                                totalIntensity[i, j] += denormalizedIntensity;
+            //    //                                totalIntensity[i, numIsotopes] += denormalizedIntensity;
+            //    //                            }
+            //    //                        }
+            //    //                        final[0, 0]++;
+            //    //                    }
+            //    //                }
+            //    //            }
+            //    //        }
+            //    //    }
+            //    //}
+
+            //    //double lightInt;
+            //    //double heavyInt;
+            //    //bool quantified = false;
+            //    //int minimumTotalPairs = 3;
+            //    //int minimumNoNBCPairs = 3;
+            //    //int minimumPostQFPairs = 3;
+
+            //    //if (final[0, 1] >= minimumPostQFPairs)
+            //    //{
+            //    //    finalQuantified[0] = final[0, 1];
+            //    //    quantifiedNoiseIncluded[0] = false;
+
+            //    //    for (int i = 1; i < numChannels; i++)
+            //    //    {
+            //    //        if (Form1.NOISEBANDCAP)
+            //    //        {
+            //    //            totalIntensity = completeTotalIntensity;
+            //    //        }
+            //    //        // Use only complete pairs for quantification
+            //    //        int index1 = 0;
+            //    //        int index2 = i;
+
+            //    //        lightInt = completeTotalIntensity[index1, numIsotopes];
+            //    //        heavyInt = completeTotalIntensity[index2, numIsotopes];
+
+            //    //        if (lightInt > 0 && heavyInt > 0)
+            //    //        {
+            //    //            heavyToLightRatioSum[i - 1, 0] = heavyInt / lightInt;
+            //    //        }
+            //    //    }
+            //    //}
+            //    //else if (final[0, 0] >= minimumPostQFPairs)
+            //    //{
+            //    //    finalQuantified[0] = final[0, 0];
+            //    //    quantifiedNoiseIncluded[0] = true;
+
+            //    //    for (int i = 1; i < numChannels; i++)
+            //    //    {
+            //    //        int index1 = 0;
+            //    //        int index2 = i;
+
+            //    //        lightInt = totalIntensity[index1, numIsotopes];
+            //    //        heavyInt = totalIntensity[index2, numIsotopes];
+
+            //    //        if (lightInt > 0 && heavyInt > 0)
+            //    //        {
+            //    //            heavyToLightRatioSum[i - 1, 0] = heavyInt / lightInt;
+            //    //        }
+            //    //    }
+            //    //}
+            //    //else
+            //    //{
+            //    //    // Not able to quantify
+            //    //    for (int i = 0; i < numChannels; i++)
+            //    //    {
+            //    //        completeTotalIntensity[i, numIsotopes] = 0;
+            //    //        totalIntensity[i, numIsotopes] = 0;
+            //    //    }
+            //    //}
+            //}  
+        }
+
+        public void mergeCompleteAllLists()
+        {
+            List<Pair> mergedList;
+            Pair pairToUpdate = null;
+            int scanNumber;
+            foreach (MSDataFile rawFile in completePairs.Keys)
+            {
+                mergedList = allPairs[rawFile];
+                List<Pair> completePairList = completePairs[rawFile];
+
+                foreach (Pair pairToAdd in completePairList)
+                {
+                    scanNumber = pairToAdd.ScanNumber;
+                    bool found = false;
+                    foreach (Pair currentPair in mergedList)
+                    {
+                        if (currentPair.ScanNumber == scanNumber)
+                        {
+                            found = true;
+                            pairToUpdate = currentPair;
+                        }
+                    }
+
+                    if (numIsotopologues > 1 && numClusters > 1)
+                    {
+                        for (int i = 0; i < numClusters; i++)
+                        {
+                            if (!found && pairToAdd.TotalPeakCount > 0) mergedList.Add(pairToAdd);
+                            else
+                            {
+                                foreach (IsotopePair isotopePairToAdd in pairToAdd.IsotopePairs)
+                                {
+                                    if (isotopePairToAdd.CompleteByCluster[i])
+                                    {
+                                        bool isotopeFound = false;
+                                        IsotopePair isotopePairToUpdate = null;
+                                        foreach (IsotopePair currentIsotopePair in pairToUpdate.IsotopePairs)
+                                        {
+                                            if (currentIsotopePair.Isotope == isotopePairToAdd.Isotope)
+                                            {
+                                                isotopeFound = true;
+                                                isotopePairToUpdate = currentIsotopePair;
+                                            }
+                                        }
+
+                                        if (!found) pairToUpdate.IsotopePairs.Add(isotopePairToAdd);
+                                        else
+                                        {
+                                            int channelIndex = i * numIsotopologues;
+                                            for (int m = channelIndex; m < channelIndex + numIsotopologues; m++)
+                                            {
+                                                isotopePairToUpdate.ChannelPeaks[m] = isotopePairToAdd.ChannelPeaks[m];
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (!found && pairToAdd.TotalPeakCount > 0) mergedList.Add(pairToAdd);
+                        else
+                        {
+                            foreach (IsotopePair isotopePairToAdd in pairToAdd.IsotopePairs)
+                            {
+                                if (isotopePairToAdd.Complete) pairToUpdate.IsotopePairs.Add(isotopePairToAdd);
+                            }
+                        }        
+                    }
+
+                }
+                allPairs[rawFile] = mergedList;
+            }
         }
 
         public static double calculateAverage(List<double> numbers)
@@ -8965,5 +10777,7 @@ namespace Coon.NeuQuant
                 return (numbers[count / 2] + numbers[(count / 2) - 1]) / 2.0;
             }
         }
+
+        
     }
 }

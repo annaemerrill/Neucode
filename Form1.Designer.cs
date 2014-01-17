@@ -32,7 +32,7 @@
             this.label2 = new System.Windows.Forms.Label();
             this.outputFolderBox = new System.Windows.Forms.TextBox();
             this.label3 = new System.Windows.Forms.Label();
-            this.rtWindow = new System.Windows.Forms.NumericUpDown();
+            this.rTWindowMin = new System.Windows.Forms.NumericUpDown();
             this.label4 = new System.Windows.Forms.Label();
             this.RAWBrowse = new System.Windows.Forms.Button();
             this.CSVBrowse = new System.Windows.Forms.Button();
@@ -71,6 +71,17 @@
             this.Icat = new System.Windows.Forms.RadioButton();
             this.listBox1 = new System.Windows.Forms.ListBox();
             this.splitContainer1 = new System.Windows.Forms.SplitContainer();
+            this.rTWindowMax = new System.Windows.Forms.NumericUpDown();
+            this.label20 = new System.Windows.Forms.Label();
+            this.intensityThreshold = new System.Windows.Forms.NumericUpDown();
+            this.label19 = new System.Windows.Forms.Label();
+            this.Arg070 = new System.Windows.Forms.CheckBox();
+            this.crossClusterQuant = new System.Windows.Forms.CheckBox();
+            this.ppmAdjustment = new System.Windows.Forms.CheckBox();
+            this.Ubiquitinylation = new System.Windows.Forms.RadioButton();
+            this.Acetyl = new System.Windows.Forms.RadioButton();
+            this.label18 = new System.Windows.Forms.Label();
+            this.heavyWater = new System.Windows.Forms.RadioButton();
             this.GygiDimethyl = new System.Windows.Forms.RadioButton();
             this.LysO18 = new System.Windows.Forms.CheckBox();
             this.Lys001 = new System.Windows.Forms.CheckBox();
@@ -108,7 +119,7 @@
             this.button1 = new System.Windows.Forms.Button();
             this.label10 = new System.Windows.Forms.Label();
             this.richTextBox1 = new System.Windows.Forms.RichTextBox();
-            ((System.ComponentModel.ISupportInitialize)(this.rtWindow)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.rTWindowMin)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.signalToNoiseThreshold)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.Isotopes)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.PeakSeparation)).BeginInit();
@@ -117,6 +128,8 @@
             this.splitContainer1.Panel1.SuspendLayout();
             this.splitContainer1.Panel2.SuspendLayout();
             this.splitContainer1.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.rTWindowMax)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.intensityThreshold)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.searchTolerance)).BeginInit();
             this.SuspendLayout();
             // 
@@ -154,37 +167,37 @@
             this.label3.TabIndex = 5;
             this.label3.Text = "Output File Location";
             // 
-            // rtWindow
+            // rTWindowMin
             // 
-            this.rtWindow.DecimalPlaces = 2;
-            this.rtWindow.Increment = new decimal(new int[] {
-            25,
+            this.rTWindowMin.DecimalPlaces = 2;
+            this.rTWindowMin.Increment = new decimal(new int[] {
+            5,
             0,
             0,
             131072});
-            this.rtWindow.Location = new System.Drawing.Point(25, 386);
-            this.rtWindow.Maximum = new decimal(new int[] {
+            this.rTWindowMin.Location = new System.Drawing.Point(113, 347);
+            this.rTWindowMin.Maximum = new decimal(new int[] {
             5,
             0,
             0,
             0});
-            this.rtWindow.Name = "rtWindow";
-            this.rtWindow.Size = new System.Drawing.Size(47, 20);
-            this.rtWindow.TabIndex = 6;
-            this.rtWindow.Value = new decimal(new int[] {
-            25,
+            this.rTWindowMin.Name = "rTWindowMin";
+            this.rTWindowMin.Size = new System.Drawing.Size(47, 20);
+            this.rTWindowMin.TabIndex = 6;
+            this.rTWindowMin.Value = new decimal(new int[] {
+            5,
             0,
             0,
-            131072});
+            65536});
             // 
             // label4
             // 
             this.label4.AutoSize = true;
-            this.label4.Location = new System.Drawing.Point(22, 370);
+            this.label4.Location = new System.Drawing.Point(109, 330);
             this.label4.Name = "label4";
-            this.label4.Size = new System.Drawing.Size(47, 13);
+            this.label4.Size = new System.Drawing.Size(70, 13);
             this.label4.TabIndex = 7;
-            this.label4.Text = "RT (min)";
+            this.label4.Text = "Low RT (min)";
             // 
             // RAWBrowse
             // 
@@ -236,7 +249,9 @@
             // noiseBandCap
             // 
             this.noiseBandCap.AutoSize = true;
-            this.noiseBandCap.Location = new System.Drawing.Point(245, 370);
+            this.noiseBandCap.Checked = true;
+            this.noiseBandCap.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.noiseBandCap.Location = new System.Drawing.Point(245, 383);
             this.noiseBandCap.Name = "noiseBandCap";
             this.noiseBandCap.Size = new System.Drawing.Size(160, 17);
             this.noiseBandCap.TabIndex = 18;
@@ -246,7 +261,8 @@
             // coalescence
             // 
             this.coalescence.AutoSize = true;
-            this.coalescence.Location = new System.Drawing.Point(421, 393);
+            this.coalescence.Enabled = false;
+            this.coalescence.Location = new System.Drawing.Point(412, 429);
             this.coalescence.Name = "coalescence";
             this.coalescence.Size = new System.Drawing.Size(147, 17);
             this.coalescence.TabIndex = 19;
@@ -268,7 +284,7 @@
             0,
             0,
             65536});
-            this.signalToNoiseThreshold.Location = new System.Drawing.Point(88, 386);
+            this.signalToNoiseThreshold.Location = new System.Drawing.Point(22, 386);
             this.signalToNoiseThreshold.Maximum = new decimal(new int[] {
             10,
             0,
@@ -286,7 +302,7 @@
             // label6
             // 
             this.label6.AutoSize = true;
-            this.label6.Location = new System.Drawing.Point(85, 370);
+            this.label6.Location = new System.Drawing.Point(22, 370);
             this.label6.Name = "label6";
             this.label6.Size = new System.Drawing.Size(50, 13);
             this.label6.TabIndex = 22;
@@ -303,7 +319,7 @@
             // 
             // Isotopes
             // 
-            this.Isotopes.Location = new System.Drawing.Point(146, 388);
+            this.Isotopes.Location = new System.Drawing.Point(149, 386);
             this.Isotopes.Maximum = new decimal(new int[] {
             10,
             0,
@@ -327,7 +343,7 @@
             // 
             this.Conversion.AutoSize = true;
             this.Conversion.Enabled = false;
-            this.Conversion.Location = new System.Drawing.Point(421, 370);
+            this.Conversion.Location = new System.Drawing.Point(412, 406);
             this.Conversion.Name = "Conversion";
             this.Conversion.Size = new System.Drawing.Size(157, 17);
             this.Conversion.TabIndex = 25;
@@ -337,7 +353,7 @@
             // label7
             // 
             this.label7.AutoSize = true;
-            this.label7.Location = new System.Drawing.Point(317, 346);
+            this.label7.Location = new System.Drawing.Point(353, 364);
             this.label7.Name = "label7";
             this.label7.Size = new System.Drawing.Size(111, 13);
             this.label7.TabIndex = 26;
@@ -420,7 +436,7 @@
             // 
             this.IncompleteIncorporation.AutoSize = true;
             this.IncompleteIncorporation.Enabled = false;
-            this.IncompleteIncorporation.Location = new System.Drawing.Point(421, 416);
+            this.IncompleteIncorporation.Location = new System.Drawing.Point(412, 452);
             this.IncompleteIncorporation.Name = "IncompleteIncorporation";
             this.IncompleteIncorporation.Size = new System.Drawing.Size(169, 17);
             this.IncompleteIncorporation.TabIndex = 49;
@@ -430,7 +446,7 @@
             // label11
             // 
             this.label11.AutoSize = true;
-            this.label11.Location = new System.Drawing.Point(24, 411);
+            this.label11.Location = new System.Drawing.Point(196, 370);
             this.label11.Name = "label11";
             this.label11.Size = new System.Drawing.Size(38, 13);
             this.label11.TabIndex = 50;
@@ -439,7 +455,7 @@
             // label12
             // 
             this.label12.AutoSize = true;
-            this.label12.Location = new System.Drawing.Point(87, 410);
+            this.label12.Location = new System.Drawing.Point(117, 411);
             this.label12.Name = "label12";
             this.label12.Size = new System.Drawing.Size(73, 13);
             this.label12.TabIndex = 51;
@@ -447,7 +463,7 @@
             // 
             // PeakSeparation
             // 
-            this.PeakSeparation.Location = new System.Drawing.Point(27, 427);
+            this.PeakSeparation.Location = new System.Drawing.Point(199, 386);
             this.PeakSeparation.Minimum = new decimal(new int[] {
             1,
             0,
@@ -469,7 +485,7 @@
             0,
             0,
             0});
-            this.QuantResolution.Location = new System.Drawing.Point(92, 427);
+            this.QuantResolution.Location = new System.Drawing.Point(120, 427);
             this.QuantResolution.Maximum = new decimal(new int[] {
             960,
             0,
@@ -522,7 +538,7 @@
             // label13
             // 
             this.label13.AutoSize = true;
-            this.label13.Location = new System.Drawing.Point(50, 462);
+            this.label13.Location = new System.Drawing.Point(50, 479);
             this.label13.Name = "label13";
             this.label13.Size = new System.Drawing.Size(122, 13);
             this.label13.TabIndex = 57;
@@ -531,7 +547,7 @@
             // MultipleInjections
             // 
             this.MultipleInjections.AutoSize = true;
-            this.MultipleInjections.Location = new System.Drawing.Point(25, 480);
+            this.MultipleInjections.Location = new System.Drawing.Point(25, 500);
             this.MultipleInjections.Name = "MultipleInjections";
             this.MultipleInjections.Size = new System.Drawing.Size(77, 17);
             this.MultipleInjections.TabIndex = 59;
@@ -541,7 +557,7 @@
             // AGCBins
             // 
             this.AGCBins.AutoSize = true;
-            this.AGCBins.Location = new System.Drawing.Point(113, 480);
+            this.AGCBins.Location = new System.Drawing.Point(113, 501);
             this.AGCBins.Name = "AGCBins";
             this.AGCBins.Size = new System.Drawing.Size(86, 17);
             this.AGCBins.TabIndex = 60;
@@ -576,6 +592,17 @@
             // 
             // splitContainer1.Panel1
             // 
+            this.splitContainer1.Panel1.Controls.Add(this.rTWindowMax);
+            this.splitContainer1.Panel1.Controls.Add(this.label20);
+            this.splitContainer1.Panel1.Controls.Add(this.intensityThreshold);
+            this.splitContainer1.Panel1.Controls.Add(this.label19);
+            this.splitContainer1.Panel1.Controls.Add(this.Arg070);
+            this.splitContainer1.Panel1.Controls.Add(this.crossClusterQuant);
+            this.splitContainer1.Panel1.Controls.Add(this.ppmAdjustment);
+            this.splitContainer1.Panel1.Controls.Add(this.Ubiquitinylation);
+            this.splitContainer1.Panel1.Controls.Add(this.Acetyl);
+            this.splitContainer1.Panel1.Controls.Add(this.label18);
+            this.splitContainer1.Panel1.Controls.Add(this.heavyWater);
             this.splitContainer1.Panel1.Controls.Add(this.GygiDimethyl);
             this.splitContainer1.Panel1.Controls.Add(this.LysO18);
             this.splitContainer1.Panel1.Controls.Add(this.Lys001);
@@ -621,7 +648,7 @@
             this.splitContainer1.Panel1.Controls.Add(this.MultipleInjections);
             this.splitContainer1.Panel1.Controls.Add(this.label3);
             this.splitContainer1.Panel1.Controls.Add(this.label13);
-            this.splitContainer1.Panel1.Controls.Add(this.rtWindow);
+            this.splitContainer1.Panel1.Controls.Add(this.rTWindowMin);
             this.splitContainer1.Panel1.Controls.Add(this.Leu000);
             this.splitContainer1.Panel1.Controls.Add(this.label4);
             this.splitContainer1.Panel1.Controls.Add(this.Arg000);
@@ -658,6 +685,132 @@
             this.splitContainer1.Size = new System.Drawing.Size(602, 648);
             this.splitContainer1.SplitterDistance = 540;
             this.splitContainer1.TabIndex = 63;
+            // 
+            // rTWindowMax
+            // 
+            this.rTWindowMax.DecimalPlaces = 2;
+            this.rTWindowMax.Increment = new decimal(new int[] {
+            5,
+            0,
+            0,
+            131072});
+            this.rTWindowMax.Location = new System.Drawing.Point(196, 347);
+            this.rTWindowMax.Maximum = new decimal(new int[] {
+            5,
+            0,
+            0,
+            0});
+            this.rTWindowMax.Name = "rTWindowMax";
+            this.rTWindowMax.Size = new System.Drawing.Size(47, 20);
+            this.rTWindowMax.TabIndex = 110;
+            this.rTWindowMax.Value = new decimal(new int[] {
+            5,
+            0,
+            0,
+            65536});
+            // 
+            // label20
+            // 
+            this.label20.AutoSize = true;
+            this.label20.Location = new System.Drawing.Point(193, 329);
+            this.label20.Name = "label20";
+            this.label20.Size = new System.Drawing.Size(72, 13);
+            this.label20.TabIndex = 109;
+            this.label20.Text = "High RT (min)";
+            // 
+            // intensityThreshold
+            // 
+            this.intensityThreshold.Location = new System.Drawing.Point(22, 426);
+            this.intensityThreshold.Maximum = new decimal(new int[] {
+            10000,
+            0,
+            0,
+            0});
+            this.intensityThreshold.Name = "intensityThreshold";
+            this.intensityThreshold.Size = new System.Drawing.Size(50, 20);
+            this.intensityThreshold.TabIndex = 108;
+            // 
+            // label19
+            // 
+            this.label19.AutoSize = true;
+            this.label19.Location = new System.Drawing.Point(19, 410);
+            this.label19.Name = "label19";
+            this.label19.Size = new System.Drawing.Size(94, 13);
+            this.label19.TabIndex = 107;
+            this.label19.Text = "Max. Intensity (E6)";
+            // 
+            // Arg070
+            // 
+            this.Arg070.AutoSize = true;
+            this.Arg070.Location = new System.Drawing.Point(220, 284);
+            this.Arg070.Name = "Arg070";
+            this.Arg070.Size = new System.Drawing.Size(66, 17);
+            this.Arg070.TabIndex = 106;
+            this.Arg070.Text = "Arg: 070";
+            this.Arg070.UseVisualStyleBackColor = true;
+            // 
+            // crossClusterQuant
+            // 
+            this.crossClusterQuant.AutoSize = true;
+            this.crossClusterQuant.Enabled = false;
+            this.crossClusterQuant.Location = new System.Drawing.Point(246, 475);
+            this.crossClusterQuant.Name = "crossClusterQuant";
+            this.crossClusterQuant.Size = new System.Drawing.Size(140, 17);
+            this.crossClusterQuant.TabIndex = 105;
+            this.crossClusterQuant.Text = "Quantify Across Clusters";
+            this.crossClusterQuant.UseVisualStyleBackColor = true;
+            // 
+            // ppmAdjustment
+            // 
+            this.ppmAdjustment.AutoSize = true;
+            this.ppmAdjustment.Location = new System.Drawing.Point(412, 475);
+            this.ppmAdjustment.Name = "ppmAdjustment";
+            this.ppmAdjustment.Size = new System.Drawing.Size(146, 17);
+            this.ppmAdjustment.TabIndex = 104;
+            this.ppmAdjustment.Text = "Adjust PPM Error for FDR";
+            this.ppmAdjustment.UseVisualStyleBackColor = true;
+            // 
+            // Ubiquitinylation
+            // 
+            this.Ubiquitinylation.AutoSize = true;
+            this.Ubiquitinylation.Location = new System.Drawing.Point(412, 502);
+            this.Ubiquitinylation.Name = "Ubiquitinylation";
+            this.Ubiquitinylation.Size = new System.Drawing.Size(48, 17);
+            this.Ubiquitinylation.TabIndex = 103;
+            this.Ubiquitinylation.TabStop = true;
+            this.Ubiquitinylation.Text = "KGG";
+            this.Ubiquitinylation.UseVisualStyleBackColor = true;
+            // 
+            // Acetyl
+            // 
+            this.Acetyl.AutoSize = true;
+            this.Acetyl.Location = new System.Drawing.Point(328, 501);
+            this.Acetyl.Name = "Acetyl";
+            this.Acetyl.Size = new System.Drawing.Size(77, 17);
+            this.Acetyl.TabIndex = 102;
+            this.Acetyl.TabStop = true;
+            this.Acetyl.Text = "Acetylation";
+            this.Acetyl.UseVisualStyleBackColor = true;
+            // 
+            // label18
+            // 
+            this.label18.AutoSize = true;
+            this.label18.Location = new System.Drawing.Point(243, 504);
+            this.label18.Name = "label18";
+            this.label18.Size = new System.Drawing.Size(68, 13);
+            this.label18.TabIndex = 101;
+            this.label18.Text = "Lysine PTMs";
+            // 
+            // heavyWater
+            // 
+            this.heavyWater.AutoSize = true;
+            this.heavyWater.Location = new System.Drawing.Point(482, 362);
+            this.heavyWater.Name = "heavyWater";
+            this.heavyWater.Size = new System.Drawing.Size(77, 17);
+            this.heavyWater.TabIndex = 99;
+            this.heavyWater.TabStop = true;
+            this.heavyWater.Text = "18O Water";
+            this.heavyWater.UseVisualStyleBackColor = true;
             // 
             // GygiDimethyl
             // 
@@ -703,7 +856,7 @@
             // label17
             // 
             this.label17.AutoSize = true;
-            this.label17.Location = new System.Drawing.Point(64, 346);
+            this.label17.Location = new System.Drawing.Point(19, 350);
             this.label17.Name = "label17";
             this.label17.Size = new System.Drawing.Size(85, 13);
             this.label17.TabIndex = 94;
@@ -810,7 +963,7 @@
             // Lys600
             // 
             this.Lys600.AutoSize = true;
-            this.Lys600.Location = new System.Drawing.Point(220, 329);
+            this.Lys600.Location = new System.Drawing.Point(287, 352);
             this.Lys600.Name = "Lys600";
             this.Lys600.Size = new System.Drawing.Size(66, 17);
             this.Lys600.TabIndex = 83;
@@ -820,7 +973,7 @@
             // Lys040
             // 
             this.Lys040.AutoSize = true;
-            this.Lys040.Location = new System.Drawing.Point(220, 306);
+            this.Lys040.Location = new System.Drawing.Point(287, 329);
             this.Lys040.Name = "Lys040";
             this.Lys040.Size = new System.Drawing.Size(66, 17);
             this.Lys040.TabIndex = 82;
@@ -830,7 +983,7 @@
             // Lys000
             // 
             this.Lys000.AutoSize = true;
-            this.Lys000.Location = new System.Drawing.Point(220, 284);
+            this.Lys000.Location = new System.Drawing.Point(287, 307);
             this.Lys000.Name = "Lys000";
             this.Lys000.Size = new System.Drawing.Size(66, 17);
             this.Lys000.TabIndex = 81;
@@ -920,7 +1073,7 @@
             // tagQuantOutput
             // 
             this.tagQuantOutput.AutoSize = true;
-            this.tagQuantOutput.Location = new System.Drawing.Point(245, 462);
+            this.tagQuantOutput.Location = new System.Drawing.Point(413, 385);
             this.tagQuantOutput.Name = "tagQuantOutput";
             this.tagQuantOutput.Size = new System.Drawing.Size(109, 17);
             this.tagQuantOutput.TabIndex = 72;
@@ -940,7 +1093,7 @@
             // rawDataOutput
             // 
             this.rawDataOutput.AutoSize = true;
-            this.rawDataOutput.Location = new System.Drawing.Point(245, 439);
+            this.rawDataOutput.Location = new System.Drawing.Point(246, 452);
             this.rawDataOutput.Name = "rawDataOutput";
             this.rawDataOutput.Size = new System.Drawing.Size(139, 17);
             this.rawDataOutput.TabIndex = 70;
@@ -950,11 +1103,11 @@
             // Fusion
             // 
             this.Fusion.AutoSize = true;
-            this.Fusion.Location = new System.Drawing.Point(50, 503);
+            this.Fusion.Location = new System.Drawing.Point(25, 457);
             this.Fusion.Name = "Fusion";
-            this.Fusion.Size = new System.Drawing.Size(122, 17);
+            this.Fusion.Size = new System.Drawing.Size(66, 17);
             this.Fusion.TabIndex = 69;
-            this.Fusion.Text = "Fusion: no 30K MS1";
+            this.Fusion.Text = "FUSION";
             this.Fusion.UseVisualStyleBackColor = true;
             // 
             // PurityCorrection
@@ -962,7 +1115,7 @@
             this.PurityCorrection.AutoSize = true;
             this.PurityCorrection.Checked = true;
             this.PurityCorrection.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.PurityCorrection.Location = new System.Drawing.Point(245, 416);
+            this.PurityCorrection.Location = new System.Drawing.Point(245, 429);
             this.PurityCorrection.Name = "PurityCorrection";
             this.PurityCorrection.Size = new System.Drawing.Size(140, 17);
             this.PurityCorrection.TabIndex = 68;
@@ -972,7 +1125,7 @@
             // TrackRT
             // 
             this.TrackRT.AutoSize = true;
-            this.TrackRT.Location = new System.Drawing.Point(245, 393);
+            this.TrackRT.Location = new System.Drawing.Point(245, 406);
             this.TrackRT.Name = "TrackRT";
             this.TrackRT.Size = new System.Drawing.Size(133, 17);
             this.TrackRT.TabIndex = 67;
@@ -982,7 +1135,7 @@
             // label14
             // 
             this.label14.AutoSize = true;
-            this.label14.Location = new System.Drawing.Point(166, 411);
+            this.label14.Location = new System.Drawing.Point(78, 370);
             this.label14.Name = "label14";
             this.label14.Size = new System.Drawing.Size(51, 13);
             this.label14.TabIndex = 65;
@@ -990,14 +1143,21 @@
             // 
             // searchTolerance
             // 
-            this.searchTolerance.Location = new System.Drawing.Point(165, 427);
+            this.searchTolerance.DecimalPlaces = 2;
+            this.searchTolerance.ImeMode = System.Windows.Forms.ImeMode.NoControl;
+            this.searchTolerance.Increment = new decimal(new int[] {
+            1,
+            0,
+            0,
+            65536});
+            this.searchTolerance.Location = new System.Drawing.Point(81, 388);
             this.searchTolerance.Minimum = new decimal(new int[] {
             1,
             0,
             0,
-            0});
+            65536});
             this.searchTolerance.Name = "searchTolerance";
-            this.searchTolerance.Size = new System.Drawing.Size(39, 20);
+            this.searchTolerance.Size = new System.Drawing.Size(52, 20);
             this.searchTolerance.TabIndex = 64;
             this.searchTolerance.Value = new decimal(new int[] {
             5,
@@ -1045,7 +1205,7 @@
             this.Load += new System.EventHandler(this.Form1_Load);
             this.DragDrop += new System.Windows.Forms.DragEventHandler(this.Form1_DragDrop);
             this.DragEnter += new System.Windows.Forms.DragEventHandler(this.Form1_DragEnter);
-            ((System.ComponentModel.ISupportInitialize)(this.rtWindow)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.rTWindowMin)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.signalToNoiseThreshold)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.Isotopes)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.PeakSeparation)).EndInit();
@@ -1055,6 +1215,8 @@
             this.splitContainer1.Panel2.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)(this.splitContainer1)).EndInit();
             this.splitContainer1.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)(this.rTWindowMax)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.intensityThreshold)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.searchTolerance)).EndInit();
             this.ResumeLayout(false);
 
@@ -1066,7 +1228,7 @@
         private System.Windows.Forms.Label label2;
         private System.Windows.Forms.TextBox outputFolderBox;
         private System.Windows.Forms.Label label3;
-        private System.Windows.Forms.NumericUpDown rtWindow;
+        private System.Windows.Forms.NumericUpDown rTWindowMin;
         private System.Windows.Forms.Label label4;
         private System.Windows.Forms.Button RAWBrowse;
         private System.Windows.Forms.Button CSVBrowse;
@@ -1142,6 +1304,17 @@
         private System.Windows.Forms.CheckBox Lys100;
         private System.Windows.Forms.CheckBox LysO18;
         private System.Windows.Forms.RadioButton GygiDimethyl;
+        private System.Windows.Forms.RadioButton heavyWater;
+        private System.Windows.Forms.RadioButton Ubiquitinylation;
+        private System.Windows.Forms.RadioButton Acetyl;
+        private System.Windows.Forms.Label label18;
+        private System.Windows.Forms.CheckBox ppmAdjustment;
+        private System.Windows.Forms.CheckBox crossClusterQuant;
+        private System.Windows.Forms.CheckBox Arg070;
+        private System.Windows.Forms.Label label19;
+        private System.Windows.Forms.NumericUpDown intensityThreshold;
+        private System.Windows.Forms.NumericUpDown rTWindowMax;
+        private System.Windows.Forms.Label label20;
     }
 }
 
